@@ -1,0 +1,170 @@
+[
+  {
+    "name_contains": ["MacBook Pro", "MacBook Air", "MacBook", "iMac", "Mac Pro", "Mac mini", "Mac Studio"],
+    "mac_prefixes": [],
+    "type": "computer",
+    "vendor": "Apple",
+    "os_hint": "macOS",
+    "ssh_capable": true
+  },
+  {
+    "name_contains": ["ubuntu", "debian", "fedora", "arch", "kali", "parrot", "mint"],
+    "mac_prefixes": [],
+    "type": "computer",
+    "vendor": "Linux",
+    "os_hint": "Linux",
+    "ssh_capable": true
+  },
+  {
+    "name_contains": ["raspberrypi", "raspberry pi", "rpi"],
+    "mac_prefixes": ["B8:27:EB", "DC:A6:32", "E4:5F:01"],
+    "type": "computer",
+    "vendor": "Raspberry Pi Foundation",
+    "os_hint": "Linux",
+    "ssh_capable": true
+  },
+  {
+    "name_contains": ["ThinkPad", "IdeaPad", "Legion", "Yoga"],
+    "mac_prefixes": [],
+    "type": "computer",
+    "vendor": "Lenovo",
+    "os_hint": "Linux",
+    "ssh_capable": true
+  },
+  {
+    "name_contains": ["Dell", "XPS", "Inspiron", "Latitude", "Precision"],
+    "mac_prefixes": [],
+    "type": "computer",
+    "vendor": "Dell",
+    "os_hint": "Linux",
+    "ssh_capable": true
+  },
+  {
+    "name_contains": ["HP EliteBook", "HP ProBook", "HP Spectre", "HP Envy", "HP Pavilion"],
+    "mac_prefixes": [],
+    "type": "computer",
+    "vendor": "HP",
+    "os_hint": "Linux",
+    "ssh_capable": true
+  },
+  {
+    "name_contains": ["Surface", "ASUS", "Acer", "MSI", "Razer Blade"],
+    "mac_prefixes": [],
+    "type": "computer",
+    "vendor": "Various",
+    "os_hint": "Linux",
+    "ssh_capable": true
+  },
+  {
+    "name_contains": ["iPhone"],
+    "mac_prefixes": [],
+    "type": "phone",
+    "vendor": "Apple",
+    "os_hint": "iOS",
+    "ssh_capable": false
+  },
+  {
+    "name_contains": ["Galaxy S", "Galaxy A", "Galaxy Z", "Samsung"],
+    "mac_prefixes": [],
+    "type": "phone",
+    "vendor": "Samsung",
+    "os_hint": "Android",
+    "ssh_capable": false
+  },
+  {
+    "name_contains": ["Pixel"],
+    "mac_prefixes": [],
+    "type": "phone",
+    "vendor": "Google",
+    "os_hint": "Android",
+    "ssh_capable": false
+  },
+  {
+    "name_contains": ["iPad"],
+    "mac_prefixes": [],
+    "type": "tablet",
+    "vendor": "Apple",
+    "os_hint": "iPadOS",
+    "ssh_capable": false
+  },
+  {
+    "name_contains": ["Galaxy Tab"],
+    "mac_prefixes": [],
+    "type": "tablet",
+    "vendor": "Samsung",
+    "os_hint": "Android",
+    "ssh_capable": false
+  },
+  {
+    "name_contains": ["AirPods", "Beats"],
+    "mac_prefixes": [],
+    "type": "audio",
+    "vendor": "Apple",
+    "os_hint": null,
+    "ssh_capable": false
+  },
+  {
+    "name_contains": ["WH-", "WF-", "Sony"],
+    "mac_prefixes": [],
+    "type": "audio",
+    "vendor": "Sony",
+    "os_hint": null,
+    "ssh_capable": false
+  },
+  {
+    "name_contains": ["Bose", "QuietComfort", "SoundLink"],
+    "mac_prefixes": [],
+    "type": "audio",
+    "vendor": "Bose",
+    "os_hint": null,
+    "ssh_capable": false
+  },
+  {
+    "name_contains": ["HP LaserJet", "HP OfficeJet", "HP DeskJet", "EPSON", "Canon Printer", "Brother"],
+    "mac_prefixes": [],
+    "type": "printer",
+    "vendor": "Various",
+    "os_hint": null,
+    "ssh_capable": false
+  },
+  {
+    "name_contains": ["Canon EOS", "Nikon", "Sony Alpha", "Fujifilm", "ILCE-", "DSLR"],
+    "mac_prefixes": [],
+    "type": "camera",
+    "vendor": "Various",
+    "os_hint": null,
+    "ssh_capable": false
+  },
+  {
+    "name_contains": ["Nintendo Switch", "Joy-Con"],
+    "mac_prefixes": [],
+    "type": "gaming",
+    "vendor": "Nintendo",
+    "os_hint": null,
+    "ssh_capable": false
+  },
+  {
+    "name_contains": ["DualSense", "DualShock", "DUALSHOCK"],
+    "mac_prefixes": [],
+    "type": "gaming",
+    "vendor": "Sony",
+    "os_hint": null,
+    "ssh_capable": false
+  },
+  {
+    "name_contains": ["Xbox", "XBOX"],
+    "mac_prefixes": [],
+    "type": "gaming",
+    "vendor": "Microsoft",
+    "os_hint": null,
+    "ssh_capable": false
+  },
+  {
+    "name_contains": ["Nest", "Ring", "Philips Hue", "LIFX", "Wyze"],
+    "mac_prefixes": [],
+    "type": "iot",
+    "vendor": "Various",
+    "os_hint": null,
+    "ssh_capable": false
+  }
+]

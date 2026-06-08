@@ -1,0 +1,23 @@
+[
+  {
+    "_comment": "Add one entry per target machine. bt_mac (exact, uppercase) takes priority over bt_name (substring match).",
+    "bt_name": "ubuntu",
+    "bt_mac": "",
+    "hostname": "192.168.1.100",
+    "display_name": "Dev Box",
+    "ssh_port": 22,
+    "ssh_user": null,
+    "ssh_password": null,
+    "ssh_key_path": null
+  },
+  {
+    "bt_name": "raspberrypi",
+    "bt_mac": "",
+    "hostname": "192.168.1.101",
+    "display_name": "Raspberry Pi",
+    "ssh_port": 22,
+    "ssh_user": "pi",
+    "ssh_password": null,
+    "ssh_key_path": null
+  }
+]
