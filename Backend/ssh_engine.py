@@ -26,11 +26,8 @@ load_dotenv()
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-RELAY_URL      = os.getenv("RELAY_URL", "http://localhost:8000")
-SSH_USERNAME   = os.getenv("SSH_USERNAME", "ubuntu")
-SSH_PASSWORD   = os.getenv("SSH_PASSWORD", "")
-SSH_KEY_PATH   = os.getenv("SSH_KEY_PATH", "")
-SSH_PORT       = int(os.getenv("SSH_PORT", "22"))
+RELAY_URL = os.getenv("RELAY_URL", "http://localhost:8000")
+SSH_PORT  = int(os.getenv("SSH_PORT", "22"))
 SSH_TIMEOUT    = int(os.getenv("SSH_TIMEOUT", "10"))
 CMD_TIMEOUT    = int(os.getenv("CMD_TIMEOUT", "15"))
 ENGINE_VERSION = "1.0.0"
@@ -545,9 +542,9 @@ def run_ssh_scan(matched: MatchedDevice) -> bool:
     scanner = SSHScanner(
         host     = matched.hostname,
         port     = matched.ssh_port,
-        username = matched.ssh_user     or SSH_USERNAME,
-        password = matched.ssh_password or SSH_PASSWORD,
-        key_path = matched.ssh_key_path or SSH_KEY_PATH,
+        username = matched.ssh_user     or "ubuntu",
+        password = matched.ssh_password or "",
+        key_path = matched.ssh_key_path or "",
     )
 
     if not scanner.connect():
@@ -711,9 +708,9 @@ def debug_scan_host(req: DirectScanRequest):
     scanner = SSHScanner(
         host     = req.hostname,
         port     = req.port,
-        username = req.username or SSH_USERNAME,
-        password = req.password or SSH_PASSWORD,
-        key_path = req.key_path or SSH_KEY_PATH,
+        username = req.username or "ubuntu",
+        password = req.password or "",
+        key_path = req.key_path or "",
     )
 
     if not scanner.connect():
@@ -722,7 +719,7 @@ def debug_scan_host(req: DirectScanRequest):
             "error": "SSH connection failed",
             "host":  req.hostname,
             "port":  req.port,
-            "user":  req.username or SSH_USERNAME,
+            "user":  req.username or "ubuntu",
         }
 
     try:
