@@ -1,0 +1,181 @@
+{
+  "hostname": "web-server-01",
+  "os": {
+    "name": "Ubuntu",
+    "version": "22.04.4 LTS",
+    "pretty_name": "Ubuntu 22.04.4 LTS",
+    "kernel": "5.15.0-105-generic",
+    "architecture": "x86_64"
+  },
+
+  "hardware": {
+    "cpu_model": "Intel Xeon E5-2676 v3",
+    "cpu_cores": 8,
+    "memory_mb": 16384
+  },
+
+  "users": [
+    {
+      "username": "root",
+      "uid": 0
+    },
+    {
+      "username": "ubuntu",
+      "uid": 1000
+    }
+  ],
+
+  "sudo": {
+    "version": "1.9.9"
+  },
+
+  "ssh": {
+    "version": "OpenSSH_8.9p1"
+  },
+
+  "apt_packages": [
+    {
+      "name": "nginx",
+      "version": "1.18.0-6ubuntu14.4"
+    },
+    {
+      "name": "openssl",
+      "version": "3.0.2-0ubuntu1.12"
+    },
+    {
+      "name": "sudo",
+      "version": "1.9.9-1ubuntu2"
+    }
+  ],
+
+  "python": {
+    "version": "3.10.12",
+    "packages": [
+      {
+        "name": "flask",
+        "version": "2.2.5"
+      },
+      {
+        "name": "requests",
+        "version": "2.31.0"
+      },
+      {
+        "name": "django",
+        "version": "4.2.10"
+      }
+    ]
+  },
+
+  "nodejs": {
+    "version": "20.11.1",
+    "packages": [
+      {
+        "name": "express",
+        "version": "4.19.2"
+      },
+      {
+        "name": "lodash",
+        "version": "4.17.21"
+      }
+    ]
+  },
+
+  "java": {
+    "version": "17.0.11"
+  },
+
+  "docker": {
+    "version": "26.0.0",
+    "images": [
+      {
+        "name": "nginx",
+        "tag": "latest"
+      },
+      {
+        "name": "postgres",
+        "tag": "16"
+      }
+    ],
+    "containers": [
+      {
+        "name": "web",
+        "image": "nginx:latest",
+        "status": "running"
+      }
+    ]
+  },
+
+  "services": [
+    {
+      "name": "ssh",
+      "status": "running"
+    },
+    {
+      "name": "nginx",
+      "status": "running"
+    },
+    {
+      "name": "postgresql",
+      "status": "running"
+    }
+  ],
+
+  "network": {
+    "open_ports": [
+      {
+        "port": 22,
+        "protocol": "tcp",
+        "service": "ssh"
+      },
+      {
+        "port": 80,
+        "protocol": "tcp",
+        "service": "nginx"
+      },
+      {
+        "port": 5432,
+        "protocol": "tcp",
+        "service": "postgresql"
+      }
+    ]
+  },
+
+  "web_servers": {
+    "nginx": {
+      "version": "1.18.0"
+    },
+    "apache": null
+  },
+
+  "databases": [
+    {
+      "type": "postgresql",
+      "version": "16.2"
+    }
+  ],
+
+  "suid_binaries": [
+    "/usr/bin/passwd",
+    "/usr/bin/sudo",
+    "/usr/bin/chsh"
+  ],
+
+  "security_updates": {
+    "upgradable_packages": 12,
+    "security_updates_available": 4
+  },
+
+  "kubernetes": {
+    "enabled": false
+  },
+
+  "environment": {
+    "cloud_provider": "AWS",
+    "virtualized": true
+  },
+
+  "scan_metadata": {
+    "scan_time": "2026-06-01T15:30:00Z",
+    "collector_version": "1.0.0"
+  }
+}
