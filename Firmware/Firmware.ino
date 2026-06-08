@@ -1,43 +1,58 @@
 // =====================================================================
-//  SPECTER OLED menu prototype
+//  SPECTER TFT menu prototype
 //
 //  Purpose:
-//    - Verify OLED + Arduino Modulino Knob interaction
+//    - Drive a 2.0" ST7789 TFT display over SPI
+//    - Drive the Arduino Modulino Knob over I2C
 //    - Prototype the scanner UI before implementing real scan logic
 //
-//  OLED wiring:
-//    OLED GND -> ESP32 GND
-//    OLED VCC -> ESP32 3.3V
-//    OLED SDA -> ESP32 GPIO 21 / D21
-//    OLED SCL -> ESP32 GPIO 22 / D22
+//  Recommended ESP32 wiring
 //
-//  Modulino Knob:
-//    Connect via Qwiic/STEMMA QT if possible, or wire:
-//    GND -> ESP32 GND
-//    3V3 -> ESP32 3.3V
-//    SDA -> ESP32 GPIO 21 / D21
-//    SCL -> ESP32 GPIO 22 / D22
+//  TFT ST7789, SPI:
+//    TFT VCC -> ESP32 3.3V
+//    TFT GND -> ESP32 GND
+//    TFT SCL -> ESP32 GPIO18  // SPI SCK / clock
+//    TFT SDA -> ESP32 GPIO23  // SPI MOSI / data to screen
+//    TFT CS  -> ESP32 GPIO5
+//    TFT DC  -> ESP32 GPIO15
+//    TFT RST -> ESP32 GPIO4
+//
+//  Modulino Knob, I2C:
+//    Knob 3V3 -> ESP32 3.3V
+//    Knob GND -> ESP32 GND
+//    Knob SDA -> ESP32 GPIO21
+//    Knob SCL -> ESP32 GPIO22
+//
+//  Notes:
+//    - The TFT pin names SDA/SCL are SPI names on this display, not I2C.
+//    - The knob and TFT share power/ground, but not data pins.
 //
 //  Arduino IDE libraries needed:
-//    - Adafruit SSD1306
+//    - Adafruit ST7789
 //    - Adafruit GFX Library
 //    - Modulino / Arduino_Modulino
 // =====================================================================
 
 #include <Wire.h>
+#include <SPI.h>
 #include <Modulino.h>
 #include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include <Adafruit_ST7789.h>
 
+// ----- I2C bus for Modulino Knob -------------------------------------
 #define I2C_SDA 21
 #define I2C_SCL 22
 
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 32
-#define OLED_RESET -1
-#define OLED_ADDR 0x3C
+// ----- SPI bus for TFT ------------------------------------------------
+#define SPI_SCK  18
+#define SPI_MOSI 23
+#define SPI_MISO 19  // not connected to this TFT, kept for ESP32 SPI setup
 
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+#define TFT_CS   5
+#define TFT_DC   15
+#define TFT_RST  4
+
+Adafruit_ST7789 tft(TFT_CS, TFT_DC, TFT_RST);
 ModulinoKnob knob;
 
 enum ScreenState {
@@ -50,14 +65,14 @@ enum ScreenState {
 ScreenState screen = SCREEN_TARGETS;
 
 const char *targetLabels[] = {
-  "All",
-  "Cameras",
+  "All devices",
+  "Security cameras",
   "Computers",
   "Phones",
   "Wearables",
-  "Sensors",
-  "Access pts",
-  "Next >"
+  "IoT sensors",
+  "Access points",
+  "Next"
 };
 
 const int TARGET_COUNT = 7;
@@ -66,58 +81,107 @@ bool targetSelected[TARGET_COUNT] = {true, true, true, true, true, true, true};
 
 const int rangeValues[] = {5, 10, 25, 50, 100};
 const int RANGE_COUNT = sizeof(rangeValues) / sizeof(rangeValues[0]);
-int rangeIndex = 2;
 
 int selectedRow = 0;
-int scanAction = 0;  // 0 = start, 1 = back
+int rangeIndex = 2;
+int scanAction = 0;  // 0 = scan, 1 = back
+
 int lastPosition = 0;
 bool lastPressed = false;
 unsigned long scanStartedMs = 0;
 unsigned long lastDrawMs = 0;
+int lastScanProgress = -1;
 
-void printCentered(const String &text, int y) {
+// ----- visual style ---------------------------------------------------
+const uint16_t C_BG       = 0x0841;  // deep blue-black
+const uint16_t C_PANEL    = 0x18E3;
+const uint16_t C_PANEL_2  = 0x2124;
+const uint16_t C_TEXT     = ST77XX_WHITE;
+const uint16_t C_MUTED    = 0x9CD3;
+const uint16_t C_ACCENT   = ST77XX_CYAN;
+const uint16_t C_GREEN    = 0x07E0;
+const uint16_t C_AMBER    = 0xFDC0;
+const uint16_t C_RED      = 0xF800;
+
+int screenW() {
+  return tft.width();
+}
+
+int screenH() {
+  return tft.height();
+}
+
+void setText(uint16_t color, uint8_t size = 1) {
+  tft.setTextColor(color);
+  tft.setTextSize(size);
+}
+
+void printCentered(const String &text, int y, uint8_t size = 1, uint16_t color = C_TEXT) {
   int16_t x1, y1;
   uint16_t w, h;
-  display.getTextBounds(text, 0, 0, &x1, &y1, &w, &h);
-  display.setCursor((SCREEN_WIDTH - w) / 2, y);
-  display.print(text);
+  tft.setTextSize(size);
+  tft.getTextBounds(text, 0, 0, &x1, &y1, &w, &h);
+  tft.setCursor((screenW() - w) / 2, y);
+  tft.setTextColor(color);
+  tft.print(text);
 }
 
-void drawHeader(const String &title) {
-  display.fillRect(0, 0, SCREEN_WIDTH, 8, SSD1306_WHITE);
-  display.setTextColor(SSD1306_BLACK);
-  display.setTextSize(1);
-  printCentered(title, 0);
-  display.setTextColor(SSD1306_WHITE);
+void drawFrame(const char *title, const char *subtitle) {
+  tft.fillScreen(C_BG);
+
+  tft.fillRect(0, 0, screenW(), 34, ST77XX_BLACK);
+  tft.drawFastHLine(0, 34, screenW(), C_ACCENT);
+
+  setText(C_ACCENT, 2);
+  tft.setCursor(12, 8);
+  tft.print("SPECTER");
+
+  setText(C_MUTED, 1);
+  tft.setCursor(218, 9);
+  tft.print(title);
+  tft.setCursor(218, 20);
+  tft.print(subtitle);
+
+  tft.fillCircle(300, 17, 5, C_GREEN);
 }
 
-void drawRow(int y, const String &label, bool selected, bool checked) {
-  if (selected) {
-    display.fillRect(0, y - 1, SCREEN_WIDTH, 7, SSD1306_WHITE);
-    display.setTextColor(SSD1306_BLACK);
-  } else {
-    display.setTextColor(SSD1306_WHITE);
-  }
+void drawFooter(const char *left, const char *right) {
+  tft.drawFastHLine(0, 220, screenW(), C_PANEL_2);
+  setText(C_MUTED, 1);
+  tft.setCursor(12, 228);
+  tft.print(left);
+  tft.setCursor(226, 228);
+  tft.print(right);
+}
 
-  display.drawRect(3, y, 5, 5, selected ? SSD1306_BLACK : SSD1306_WHITE);
+void drawCheckBox(int x, int y, bool checked, bool active) {
+  uint16_t color = active ? C_ACCENT : C_MUTED;
+  tft.drawRect(x, y, 16, 16, color);
   if (checked) {
-    display.fillRect(5, y + 2, 2, 2, selected ? SSD1306_BLACK : SSD1306_WHITE);
+    tft.fillRect(x + 4, y + 4, 8, 8, active ? C_ACCENT : C_GREEN);
   }
-
-  display.setCursor(13, y);
-  display.print(label);
-
-  if (selected) {
-    display.setCursor(120, y);
-    display.print(">");
-  }
-
-  display.setTextColor(SSD1306_WHITE);
 }
 
-bool targetIsChecked(int row) {
-  if (row < 0 || row >= TARGET_COUNT) return false;
-  return targetSelected[row];
+void drawTargetRow(int y, int row, bool active) {
+  bool isNext = (row == TARGET_NEXT_ROW);
+
+  if (active) {
+    tft.fillRoundRect(14, y - 4, 292, 28, 5, C_PANEL_2);
+    tft.drawRoundRect(14, y - 4, 292, 28, 5, C_ACCENT);
+  }
+
+  if (isNext) {
+    setText(active ? C_ACCENT : C_TEXT, 2);
+    tft.setCursor(38, y);
+    tft.print("Continue to range");
+    tft.fillTriangle(286, y + 5, 276, y, 276, y + 10, active ? C_ACCENT : C_MUTED);
+    return;
+  }
+
+  drawCheckBox(28, y, targetSelected[row], active);
+  setText(active ? C_TEXT : C_MUTED, 2);
+  tft.setCursor(56, y);
+  tft.print(targetLabels[row]);
 }
 
 int selectedTargetCount() {
@@ -129,7 +193,7 @@ int selectedTargetCount() {
 }
 
 String targetSummary() {
-  if (targetSelected[0]) return "All";
+  if (targetSelected[0]) return "All devices";
 
   int count = selectedTargetCount();
   if (count == 0) return "None";
@@ -139,109 +203,124 @@ String targetSummary() {
     }
   }
 
-  return String(count) + " types";
+  return String(count) + " categories";
 }
 
 void drawTargetsScreen() {
-  display.clearDisplay();
-  drawHeader("TARGET PROFILE");
+  drawFrame("TARGETS", "choose profile");
 
-  int first = selectedRow - 1;
+  int first = selectedRow - 2;
   if (first < 0) first = 0;
-  if (first > TARGET_NEXT_ROW - 2) first = TARGET_NEXT_ROW - 2;
+  if (first > TARGET_NEXT_ROW - 4) first = TARGET_NEXT_ROW - 4;
 
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 5; i++) {
     int row = first + i;
-    bool isNext = (row == TARGET_NEXT_ROW);
-    drawRow(10 + i * 8, targetLabels[row], row == selectedRow,
-            isNext ? false : targetIsChecked(row));
+    drawTargetRow(54 + i * 34, row, row == selectedRow);
   }
 
-  display.display();
+  drawFooter("ROTATE: move", "CLICK: select");
 }
 
 void drawRangeScreen() {
-  display.clearDisplay();
-  drawHeader("SCAN RANGE");
+  drawFrame("RANGE", "meters");
 
-  display.setTextSize(2);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(5, 12);
-  display.print(rangeValues[rangeIndex]);
-  display.print("m");
+  tft.fillRoundRect(16, 52, 132, 142, 8, C_PANEL);
+  tft.drawRoundRect(16, 52, 132, 142, 8, C_PANEL_2);
 
-  display.setTextSize(1);
-  display.setCursor(70, 11);
-  display.print("Targets");
-  display.setCursor(70, 21);
-  display.print(targetSummary());
+  setText(C_ACCENT, 5);
+  tft.setCursor(34, 84);
+  tft.print(rangeValues[rangeIndex]);
 
-  int barX = 5;
-  int barY = 28;
-  int barW = 60;
-  display.drawRect(barX, barY, barW, 4, SSD1306_WHITE);
-  int fillW = map(rangeIndex, 0, RANGE_COUNT - 1, 6, barW - 2);
-  display.fillRect(barX + 1, barY + 1, fillW, 2, SSD1306_WHITE);
+  setText(C_TEXT, 3);
+  tft.setCursor(94, 108);
+  tft.print("m");
 
-  display.display();
+  tft.fillRoundRect(174, 52, 146, 142, 8, C_PANEL);
+  setText(C_MUTED, 1);
+  tft.setCursor(190, 70);
+  tft.print("TARGET PROFILE");
+
+  setText(C_TEXT, 2);
+  tft.setCursor(190, 92);
+  tft.print(targetSummary());
+
+  setText(C_MUTED, 1);
+  tft.setCursor(190, 142);
+  tft.print("SCAN ENVELOPE");
+
+  int barX = 190;
+  int barY = 162;
+  int barW = 92;
+  tft.drawRect(barX, barY, barW, 10, C_MUTED);
+  int fillW = map(rangeIndex, 0, RANGE_COUNT - 1, 8, barW - 2);
+  tft.fillRect(barX + 1, barY + 1, fillW, 8, C_ACCENT);
+
+  drawFooter("ROTATE: adjust", "CLICK: plan");
 }
 
-void drawButton(int x, int y, int w, const String &label, bool selected) {
-  if (selected) {
-    display.fillRect(x, y, w, 9, SSD1306_WHITE);
-    display.setTextColor(SSD1306_BLACK);
-  } else {
-    display.drawRect(x, y, w, 9, SSD1306_WHITE);
-    display.setTextColor(SSD1306_WHITE);
-  }
+void drawButton(int x, int y, int w, const char *label, bool active) {
+  uint16_t fill = active ? C_ACCENT : C_PANEL;
+  uint16_t text = active ? ST77XX_BLACK : C_TEXT;
+  tft.fillRoundRect(x, y, w, 44, 7, fill);
+  tft.drawRoundRect(x, y, w, 44, 7, active ? C_TEXT : C_PANEL_2);
 
   int16_t x1, y1;
   uint16_t tw, th;
-  display.getTextBounds(label, 0, 0, &x1, &y1, &tw, &th);
-  display.setCursor(x + (w - tw) / 2, y + 2);
-  display.print(label);
-  display.setTextColor(SSD1306_WHITE);
+  tft.setTextSize(2);
+  tft.getTextBounds(label, 0, 0, &x1, &y1, &tw, &th);
+  tft.setCursor(x + (w - tw) / 2, y + 14);
+  tft.setTextColor(text);
+  tft.print(label);
 }
 
 void drawScanReadyScreen() {
-  display.clearDisplay();
-  drawHeader("SCAN PLAN");
+  drawFrame("PLAN", "ready");
 
-  display.setCursor(0, 11);
-  display.print("Tgt ");
-  display.print(targetSummary());
+  tft.fillRoundRect(16, 52, 178, 142, 8, C_PANEL);
 
-  display.setCursor(0, 20);
-  display.print("Rng ");
-  display.print(rangeValues[rangeIndex]);
-  display.print("m");
+  setText(C_MUTED, 1);
+  tft.setCursor(32, 70);
+  tft.print("TARGETS");
+  setText(C_TEXT, 2);
+  tft.setCursor(32, 90);
+  tft.print(targetSummary());
 
-  drawButton(76, 12, 44, "SCAN", scanAction == 0);
-  drawButton(76, 23, 44, "BACK", scanAction == 1);
+  setText(C_MUTED, 1);
+  tft.setCursor(32, 132);
+  tft.print("RANGE");
+  setText(C_ACCENT, 3);
+  tft.setCursor(32, 150);
+  tft.print(rangeValues[rangeIndex]);
+  tft.print("m");
 
-  display.display();
+  drawButton(214, 64, 92, "SCAN", scanAction == 0);
+  drawButton(214, 128, 92, "BACK", scanAction == 1);
+
+  drawFooter("ROTATE: option", "CLICK: confirm");
 }
 
 void drawScanningScreen() {
   unsigned long elapsed = millis() - scanStartedMs;
-  int progress = min(100, (int)(elapsed / 30));
+  int progress = min(100, (int)(elapsed / 40));
 
-  display.clearDisplay();
-  drawHeader("SCANNING");
+  drawFrame("ACTIVE", "ui demo");
 
-  display.setCursor(0, 12);
-  display.print("Tgt ");
-  display.print(targetSummary());
+  printCentered("SCANNING", 70, 4, C_ACCENT);
 
-  display.setCursor(0, 21);
-  display.print("Rng ");
-  display.print(rangeValues[rangeIndex]);
-  display.print("m / UI");
+  setText(C_MUTED, 1);
+  tft.setCursor(42, 122);
+  tft.print("Profile: ");
+  tft.print(targetSummary());
 
-  display.drawRect(0, 29, SCREEN_WIDTH, 3, SSD1306_WHITE);
-  display.fillRect(1, 30, map(progress, 0, 100, 0, SCREEN_WIDTH - 2), 1, SSD1306_WHITE);
+  tft.setCursor(42, 140);
+  tft.print("Range: ");
+  tft.print(rangeValues[rangeIndex]);
+  tft.print("m");
 
-  display.display();
+  tft.drawRoundRect(42, 170, 236, 18, 5, C_MUTED);
+  tft.fillRoundRect(45, 173, map(progress, 0, 100, 0, 230), 12, 4, C_ACCENT);
+
+  drawFooter("MOCK SCAN ONLY", "CLICK: home");
 }
 
 void toggleTarget(int row) {
@@ -292,11 +371,13 @@ void handleClick() {
   } else if (screen == SCREEN_SCAN_READY) {
     if (scanAction == 0) {
       scanStartedMs = millis();
+      lastScanProgress = -1;
       screen = SCREEN_SCANNING;
     } else {
       screen = SCREEN_RANGE;
     }
   } else if (screen == SCREEN_SCANNING) {
+    selectedRow = 0;
     screen = SCREEN_TARGETS;
   }
 }
@@ -339,14 +420,14 @@ void setup() {
   Wire.begin(I2C_SDA, I2C_SCL);
   scanI2CBus();
 
-  if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR)) {
-    Serial.println("OLED not found at 0x3C. Check SDA/SCL, power, and address.");
-    while (true) {
-      delay(100);
-    }
-  }
+  SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI, TFT_CS);
+  pinMode(TFT_CS, OUTPUT);
+  digitalWrite(TFT_CS, HIGH);
 
-  display.setTextWrap(false);
+  tft.init(240, 320);
+  tft.setRotation(1);
+  tft.setTextWrap(false);
+  tft.fillScreen(C_BG);
 
   Modulino.begin();
   knob.begin();
@@ -354,7 +435,7 @@ void setup() {
   lastPosition = knob.get();
   lastPressed = knob.isPressed();
 
-  Serial.println("SPECTER menu UI ready.");
+  Serial.println("SPECTER TFT menu UI ready.");
   drawCurrentScreen();
 }
 
@@ -385,10 +466,14 @@ void loop() {
   }
 
   if (screen == SCREEN_SCANNING && millis() - lastDrawMs > 100) {
-    needsDraw = true;
+    int progress = min(100, (int)((millis() - scanStartedMs) / 40));
+    if (progress != lastScanProgress) {
+      lastScanProgress = progress;
+      needsDraw = true;
+    }
   }
 
-  if (needsDraw || millis() - lastDrawMs > 750) {
+  if (needsDraw) {
     drawCurrentScreen();
     lastDrawMs = millis();
   }
