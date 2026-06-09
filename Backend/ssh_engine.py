@@ -63,8 +63,7 @@ def _load_json(filename: str) -> Any:
     return None
 
 
-KNOWN_DEVICES: List[Dict] = _load_json("known_devices.json") or []
-HOSTS:         List[Dict] = _load_json("hosts.json") or []
+HOSTS: List[Dict] = _load_json("hosts.json") or []
 COMMANDS:      Dict       = (_load_json("ssh_commands.json") or {}).get("commands", {})
 
 WELL_KNOWN_PORTS: Dict[int, str] = {
@@ -114,23 +113,8 @@ def estimate_distance(rssi: Optional[int]) -> Optional[float]:
     return round(10 ** ((-65 - rssi) / 20.0), 2)
 
 
-def _classify(bt: BluetoothDevice) -> Optional[Dict]:
-    """Match a BT device against known_devices.json patterns."""
-    name_lower = (bt.name or "").lower()
-    mac_upper  = (bt.mac  or "").upper().replace("-", ":")
-
-    for pattern in KNOWN_DEVICES:
-        for prefix in pattern.get("mac_prefixes", []):
-            if mac_upper.startswith(prefix.upper()):
-                return pattern
-        for kw in pattern.get("name_contains", []):
-            if kw.lower() in name_lower:
-                return pattern
-    return None
-
-
 def _lookup_host(bt: BluetoothDevice) -> Optional[Dict]:
-    """Find an SSH host record in hosts.json."""
+    """Match a BT device against hosts.json — MAC exact match takes priority, then name substring."""
     name_lower = (bt.name or "").lower()
     mac_upper  = (bt.mac  or "").upper().replace("-", ":")
 
@@ -143,25 +127,20 @@ def _lookup_host(bt: BluetoothDevice) -> Optional[Dict]:
 
 
 def build_matched_device(bt: BluetoothDevice) -> Optional[MatchedDevice]:
-    cls  = _classify(bt)
-    if not cls:
-        return None
-
     host = _lookup_host(bt)
+    if not host:
+        return None
 
     return MatchedDevice(
         bt_name      = bt.name,
         bt_mac       = bt.mac,
         rssi         = bt.rssi,
-        device_type  = cls.get("type", "unknown"),
-        vendor       = cls.get("vendor"),
-        os_hint      = cls.get("os_hint"),
-        ssh_capable  = cls.get("ssh_capable", False),
-        hostname     = (host or {}).get("hostname"),
-        ssh_port     = (host or {}).get("ssh_port", SSH_PORT),
-        ssh_user     = (host or {}).get("ssh_user"),
-        ssh_password = (host or {}).get("ssh_password"),
-        ssh_key_path = (host or {}).get("ssh_key_path"),
+        ssh_capable  = host.get("can_ssh", False),
+        hostname     = host.get("hostname"),
+        ssh_port     = host.get("ssh_port", SSH_PORT),
+        ssh_user     = host.get("ssh_user"),
+        ssh_password = host.get("ssh_password"),
+        ssh_key_path = host.get("ssh_key_path"),
         distance_m   = estimate_distance(bt.rssi),
     )
 
@@ -594,7 +573,6 @@ def health():
     return {
         "status":                "ok",
         "relay_url":             RELAY_URL,
-        "known_device_patterns": len(KNOWN_DEVICES),
         "registered_hosts":      len(HOSTS),
         "ssh_commands_loaded":   len(COMMANDS),
     }
