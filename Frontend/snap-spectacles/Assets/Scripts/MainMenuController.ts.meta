@@ -1,0 +1,47 @@
+- !<AssetImportMetadata/d9a24c7a-83a5-4001-9187-914e6ed19b53>
+  ImportedAssetIds:
+    TypeScriptAsset: !<reference> d1e90490-811b-40aa-a6df-064a7c8cb6b3
+  ImporterName: TypeScriptAssetImporter
+  PrimaryAsset: !<reference> d1e90490-811b-40aa-a6df-064a7c8cb6b3
+  PackageType: NotAPackage
+  LegacyPackagePolicy: ~
+  ExtraData:
+    {}
+  AssetDataMap:
+    TypeScriptAsset: !<own> 63feee1f-90e2-4e1d-8bef-a44859d9d107
+  DependentFiles:
+    []
+  ImporterSettings: !<AssetImporterSettings>
+    {}
+  CompressionSettings: !<own> 00000000-0000-0000-0000-000000000000
+- !<TypeScriptAssetData/63feee1f-90e2-4e1d-8bef-a44859d9d107>
+  SvgIcon: ""
+  SetupScript:
+    code: ""
+  Description: ""
+  VersionMajor: 0
+  VersionMinor: 0
+  VersionPatch: 0
+  ComponentUid: db1cad3a-39f6-47c7-aa22-ad89b7306a68
+  ExportUid: 00000000-0000-0000-0000-000000000000
+  PackagePolicy: CanBeUnpacked
+  ScriptInputsHidden:
+    cameraRoot: false
+    deviceListPanel: false
+  ScriptTypesHidden:
+    {}
+  ReadMe: !<reference> 00000000-0000-0000-0000-000000000000
+  DeclarationFile: !<reference> 00000000-0000-0000-0000-000000000000
+  Tags:
+    []
+  Attachments:
+    []
+  DefaultScriptInputs:
+    - cameraRoot: !<reference.SceneObject> 00000000-0000-0000-0000-000000000000
+      deviceListPanel: !<reference.ScriptComponent> 00000000-0000-0000-0000-000000000000
+  ScriptTypes:
+    -
+      {}
+  InputLines:
+    - '// @input SceneObject cameraRoot {"hint":"The main camera so the menu can follow it"}'
+    - '// @input Component.ScriptComponent deviceListPanel {"hint":"Reference to the DeviceListPanel component in the scene"}'

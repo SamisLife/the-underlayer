@@ -1,0 +1,77 @@
+- !<AssetImportMetadata/e212d67e-5bc6-4076-bef5-1c73911bb4b4>
+  ImportedAssetIds:
+    TypeScriptAsset: !<reference> 5e464cea-4eea-4361-9d31-fefdc9eae9d3
+  ImporterName: TypeScriptAssetImporter
+  PrimaryAsset: !<reference> 5e464cea-4eea-4361-9d31-fefdc9eae9d3
+  PackageType: NotAPackage
+  LegacyPackagePolicy: ~
+  ExtraData:
+    {}
+  AssetDataMap:
+    TypeScriptAsset: !<own> f68cb247-2b6a-41d8-af3e-97f713216e56
+  DependentFiles:
+    []
+  ImporterSettings: !<AssetImporterSettings>
+    {}
+  CompressionSettings: !<own> 00000000-0000-0000-0000-000000000000
+- !<TypeScriptAssetData/f68cb247-2b6a-41d8-af3e-97f713216e56>
+  SvgIcon: ""
+  SetupScript:
+    code: ""
+  Description: ""
+  VersionMajor: 0
+  VersionMinor: 0
+  VersionPatch: 0
+  ComponentUid: 36bacf06-e828-4dec-904d-48dfdecdd6ea
+  ExportUid: 00000000-0000-0000-0000-000000000000
+  PackagePolicy: CanBeUnpacked
+  ScriptInputsHidden:
+    cameraRoot: false
+    hudFont: false
+    indicatorMaterial: false
+    indicatorPrefab: false
+    indicatorScale: false
+    laptopPrefab: false
+    modelOffsetY: false
+    modelOffsetZ: false
+    modelScale: false
+    phonePrefab: false
+    routerPrefab: false
+    websocketUrl: false
+  ScriptTypesHidden:
+    {}
+  ReadMe: !<reference> 00000000-0000-0000-0000-000000000000
+  DeclarationFile: !<reference> 00000000-0000-0000-0000-000000000000
+  Tags:
+    []
+  Attachments:
+    []
+  DefaultScriptInputs:
+    - cameraRoot: !<reference.SceneObject> 00000000-0000-0000-0000-000000000000
+      websocketUrl: "wss://booth-alone-tool-syndrome.trycloudflare.com/ws/devices"
+      hudFont: !<reference.Font> 00000000-0000-0000-0000-000000000000
+      phonePrefab: !<reference.ObjectPrefab> 00000000-0000-0000-0000-000000000000
+      laptopPrefab: !<reference.ObjectPrefab> 00000000-0000-0000-0000-000000000000
+      routerPrefab: !<reference.ObjectPrefab> 00000000-0000-0000-0000-000000000000
+      indicatorPrefab: !<reference.ObjectPrefab> 00000000-0000-0000-0000-000000000000
+      indicatorScale: !<float> 1.000000
+      indicatorMaterial: !<reference.Material> 00000000-0000-0000-0000-000000000000
+      modelScale: 0.200000
+      modelOffsetY: 1.500000
+      modelOffsetZ: !<float> 4.000000
+  ScriptTypes:
+    -
+      {}
+  InputLines:
+    - '// @input SceneObject cameraRoot {"hint":"Optional. Assign the Camera Object to copy its render layer."}'
+    - '// @input string websocketUrl = "ws://10.0.0.131:8000/ws/devices" {"hint":"URL for the WebSocket backend (e.g. ws://10.0.0.131:8000/ws/devices or wss://tunnel.cloudflare.com/ws/devices)"}'
+    - '// @input Asset.Font hudFont {"hint":"Optional monospace font for all console labels."}'
+    - '// @input Asset.ObjectPrefab phonePrefab {"hint":"Prefab for a Phone device (with hacker material)"}'
+    - '// @input Asset.ObjectPrefab laptopPrefab {"hint":"Prefab for a Laptop device (with hacker material)"}'
+    - '// @input Asset.ObjectPrefab routerPrefab {"hint":"Prefab for a Router device (with hacker material)"}'
+    - '// @input Asset.ObjectPrefab indicatorPrefab {"hint":"Prefab for the device indicator (e.g. 3D discord server mesh)."}'
+    - '// @input float indicatorScale = 1 {"hint":"Scale multiplier for the indicator prefab"}'
+    - '// @input Asset.Material indicatorMaterial {"hint":"Optional material (like Hologram.mat) to apply to the indicator for a glowing effect."}'
+    - '// @input float modelScale = 0.2 {"hint":"Scale multiplier to size the 3D models down to fit the cell"}'
+    - '// @input float modelOffsetY = 1.5 {"hint":"Y-axis offset to center models vertically in their cell"}'
+    - '// @input float modelOffsetZ = 4 {"hint":"Z-axis offset to push models forward out of the screen"}'

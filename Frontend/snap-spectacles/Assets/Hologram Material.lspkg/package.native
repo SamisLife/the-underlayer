@@ -1,0 +1,37 @@
+- !<NativePackageDescriptor/06722bda-27a8-4871-8f7b-7de81874149b>
+  PackagePath: ""
+  StudioVersion:
+    major: 5
+    minor: 15
+    patch: 0
+    build: 25101318
+    type: Unset
+    buildFlavor: ""
+    timestamp: 0
+    commit: ""
+  Description: "Hologram Material This material creates a hologram effect when applies to a 3D object, with full control of glitch animation, scan lines and colors. Works best on 3D objects with higher polycounts."
+  SvgIcon: ""
+  SetupScript:
+    code: ""
+  VersionMajor: 1
+  VersionMinor: 0
+  VersionPatch: 0
+  UpdateCheckpoint: 76
+  ExportUid: c4a2b56c-4547-4fc1-9336-d2b590c2f20e
+  ComponentUid: f04a37da-17cd-493d-990c-6bd860f6de14
+  PackagePolicy: CanBeUnpackedTransparent
+  ReadMe: !<reference> 00000000-0000-0000-0000-000000000000
+  Tags:
+    []
+  Attachments:
+    []
+  Instantiable: !<reference> 00000000-0000-0000-0000-000000000000
+  AssetLibraryDependencyStructure: !<AssetLibraryDependencyStructure>
+    Name: ""
+    AssetId: ""
+    Hash: ""
+    Version:
+      major: 0
+      minor: 0
+      patch: 0
+      build: 0
