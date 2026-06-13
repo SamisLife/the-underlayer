@@ -5,6 +5,7 @@ import os
 import json
 import logging
 import requests
+import httpx
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,6 +35,7 @@ db = mongo_client[MONGO_DB]
 app = FastAPI(title="The Underlayer Relay")
 
 connected_clients: List[WebSocket] = []
+ESP32_IP = None
 
 
 class OSInfo(BaseModel):
@@ -143,6 +145,7 @@ class DeviceScan(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     device_id: Optional[str] = None
+    device_type: Optional[str] = None
     mac: Optional[str] = None
     ip: Optional[str] = None
     position: Optional[Dict[str, float]] = None
@@ -176,32 +179,145 @@ class ApprovalRequest(BaseModel):
     approved: bool
 
 
-KNOWN_VULNERABILITIES = [
-    {
-        "type": "package",
-        "name": "openssl",
-        "affected_versions": ["3.0.2-0ubuntu1.12"],
-        "cve": "CVE-DEMO-OPENSSL",
-        "severity": "high",
-        "fix": "sudo apt update && sudo apt install --only-upgrade openssl -y"
-    },
-    {
-        "type": "python_package",
-        "name": "flask",
-        "affected_versions": ["2.2.5"],
-        "cve": "CVE-DEMO-FLASK",
-        "severity": "medium",
-        "fix": "pip install --upgrade flask"
-    },
-    {
-        "type": "open_port",
-        "name": "postgresql",
-        "port": 5432,
-        "cve": "CONFIG-RISK-POSTGRES-EXPOSED",
-        "severity": "medium",
-        "fix": "sudo ufw deny 5432/tcp"
-    }
-]
+# ── OSV vulnerability lookup ──────────────────────────────────────────────────
+
+_osv_cache: dict = {}          # (name, version, ecosystem) -> list[vuln]
+_OSV_CACHE_MAX  = 2000
+_OSV_BATCH_SIZE = 100
+_OSV_TIMEOUT    = 12.0         # seconds per HTTP request
+
+
+async def _query_osv_batch(queries: list) -> list:
+    """POST /v1/querybatch to OSV. Returns a list of vuln-lists in the same order."""
+    try:
+        async with httpx.AsyncClient(timeout=_OSV_TIMEOUT) as client:
+            resp = await client.post(
+                "https://api.osv.dev/v1/querybatch",
+                json={"queries": queries},
+            )
+            resp.raise_for_status()
+            return [r.get("vulns") or [] for r in resp.json().get("results", [])]
+    except Exception as e:
+        log.warning("OSV batch query failed: %s", e)
+        return [[] for _ in queries]
+
+
+async def check_osv_vulnerabilities(raw_scan: dict) -> list:
+    """
+    Query OSV for every pip / npm / apt package in the scan.
+    Results are cached in-process by (name, version, ecosystem) so repeated
+    scans of the same host don't re-hit the network.
+    """
+    os_info    = raw_scan.get("os") or {}
+    pretty_os  = (os_info.get("pretty_name") or os_info.get("name") or "").lower()
+    apt_ecosystem = "Ubuntu" if "ubuntu" in pretty_os else "Debian"
+
+    # Build flat list: (meta, osv_query)
+    to_query: list[tuple[dict, dict]] = []
+
+    python_info = raw_scan.get("python") or {}
+    for pkg in python_info.get("packages") or []:
+        if pkg.get("name") and pkg.get("version"):
+            to_query.append((
+                {"source": "python", "name": pkg["name"], "version": pkg["version"]},
+                {"package": {"name": pkg["name"], "ecosystem": "PyPI"}, "version": pkg["version"]},
+            ))
+
+    node_info = raw_scan.get("nodejs") or {}
+    for pkg in node_info.get("packages") or []:
+        if pkg.get("name") and pkg.get("version"):
+            to_query.append((
+                {"source": "npm", "name": pkg["name"], "version": pkg["version"]},
+                {"package": {"name": pkg["name"], "ecosystem": "npm"}, "version": pkg["version"]},
+            ))
+
+    for pkg in raw_scan.get("apt_packages") or []:
+        if pkg.get("name") and pkg.get("version"):
+            to_query.append((
+                {"source": "apt", "name": pkg["name"], "version": pkg["version"]},
+                {"package": {"name": pkg["name"], "ecosystem": apt_ecosystem}, "version": pkg["version"]},
+            ))
+
+    if not to_query:
+        return []
+
+    # Separate cached from uncached
+    results_map: dict[int, list] = {}
+    uncached: list[tuple[int, dict, dict]] = []
+
+    for i, (meta, query) in enumerate(to_query):
+        key = (query["package"]["name"], query.get("version", ""), query["package"]["ecosystem"])
+        if key in _osv_cache:
+            results_map[i] = _osv_cache[key]
+        else:
+            uncached.append((i, meta, query))
+
+    # Evict oldest half if cache is full
+    if len(_osv_cache) > _OSV_CACHE_MAX:
+        for k in list(_osv_cache.keys())[: _OSV_CACHE_MAX // 2]:
+            del _osv_cache[k]
+
+    # Batch-query uncached entries in chunks of _OSV_BATCH_SIZE
+    for chunk_start in range(0, len(uncached), _OSV_BATCH_SIZE):
+        chunk        = uncached[chunk_start : chunk_start + _OSV_BATCH_SIZE]
+        vuln_lists   = await _query_osv_batch([q for (_, _, q) in chunk])
+        for (orig_idx, meta, query), vulns in zip(chunk, vuln_lists):
+            key = (query["package"]["name"], query.get("version", ""), query["package"]["ecosystem"])
+            _osv_cache[key] = vulns
+            results_map[orig_idx] = vulns
+
+    # Flatten into match dicts
+    _sev_map = {"CRITICAL": "critical", "HIGH": "high",
+                "MODERATE": "medium", "MEDIUM": "medium", "LOW": "low"}
+    matches = []
+
+    for i, (meta, _) in enumerate(to_query):
+        for vuln in results_map.get(i) or []:
+            db_specific = vuln.get("database_specific") or {}
+            severity    = _sev_map.get((db_specific.get("severity") or "").upper(), "medium")
+
+            # Extract the fixed version from affected ranges
+            fix_version = None
+            for affected in vuln.get("affected") or []:
+                for rng in affected.get("ranges") or []:
+                    for event in rng.get("events") or []:
+                        if "fixed" in event:
+                            fix_version = event["fixed"]
+                            break
+                    if fix_version:
+                        break
+                if fix_version:
+                    break
+
+            # Prefer a CVE- alias over the GHSA id
+            cve_id = next(
+                (a for a in (vuln.get("aliases") or []) if a.startswith("CVE-")),
+                vuln["id"],
+            )
+
+            matches.append({
+                "source":              meta["source"],
+                "package":             meta["name"],
+                "version":             meta["version"],
+                "cve":                 cve_id,
+                "ghsa":                vuln["id"],
+                "severity":            severity,
+                "summary":             vuln.get("summary") or "",
+                "fix_version":         fix_version,
+                "recommended_command": None,  # populated only by /api/analyze/{hostname}
+            })
+
+    # Deduplicate: GHSA and PYSEC records often reference the same underlying CVE.
+    # Keep the first occurrence of each (package, version, cve_id) triple.
+    seen: set = set()
+    deduped: list = []
+    for m in matches:
+        key = (m["package"], m["version"], m["cve"])
+        if key not in seen:
+            seen.add(key)
+            deduped.append(m)
+
+    return deduped
 
 
 def calculate_severity(scan: Dict[str, Any]) -> str:
@@ -269,53 +385,6 @@ def build_findings(scan: Dict[str, Any]) -> List[Dict[str, Any]]:
     return findings
 
 
-def check_known_vulnerabilities(raw_scan: dict) -> List[Dict[str, Any]]:
-    matches = []
-
-    apt_packages = raw_scan.get("apt_packages") or []
-    python_info = raw_scan.get("python") or {}
-    python_packages = python_info.get("packages") or []
-    network_info = raw_scan.get("network") or {}
-    open_ports = network_info.get("open_ports") or []
-
-    for vuln in KNOWN_VULNERABILITIES:
-        if vuln["type"] == "package":
-            for pkg in apt_packages:
-                if pkg.get("name") == vuln["name"] and pkg.get("version") in vuln["affected_versions"]:
-                    matches.append({
-                        "source": "apt",
-                        "package": pkg.get("name"),
-                        "version": pkg.get("version"),
-                        "cve": vuln["cve"],
-                        "severity": vuln["severity"],
-                        "recommended_command": vuln["fix"]
-                    })
-
-        if vuln["type"] == "python_package":
-            for pkg in python_packages:
-                if pkg.get("name") == vuln["name"] and pkg.get("version") in vuln["affected_versions"]:
-                    matches.append({
-                        "source": "python",
-                        "package": pkg.get("name"),
-                        "version": pkg.get("version"),
-                        "cve": vuln["cve"],
-                        "severity": vuln["severity"],
-                        "recommended_command": vuln["fix"]
-                    })
-
-        if vuln["type"] == "open_port":
-            for port in open_ports:
-                if port.get("port") == vuln["port"]:
-                    matches.append({
-                        "source": "network",
-                        "service": port.get("service"),
-                        "port": port.get("port"),
-                        "cve": vuln["cve"],
-                        "severity": vuln["severity"],
-                        "recommended_command": vuln["fix"]
-                    })
-
-    return matches
 
 
 def build_ar_summary(scan: Dict[str, Any]) -> Dict[str, Any]:
@@ -333,9 +402,10 @@ def build_ar_summary(scan: Dict[str, Any]) -> Dict[str, Any]:
         "mac": scan.get("mac"),
         "ip": scan.get("ip"),
         "label": hostname,
-        "deviceType": "Linux Server",
+        "deviceType": scan.get("device_type") or "Unknown",
         "position": scan.get("position"),
-        "os": os_info.get("pretty_name") or os_info.get("version") or os_info.get("name"),
+        "os": os_info.get("pretty_name") or os_info.get("name") or "Unknown",
+        "osVersion": os_info.get("version") or "",
         "kernel": os_info.get("kernel"),
         "severity": severity,
         "statusColor": {
@@ -347,7 +417,9 @@ def build_ar_summary(scan: Dict[str, Any]) -> Dict[str, Any]:
         "openPorts": network.get("open_ports") or [],
         "securityUpdatesAvailable": security_updates.get("security_updates_available", 0),
         "findings": findings,
-        "summary": f"{hostname} is a Linux server with {severity} risk.",
+        "vulns": len(findings), # Baseline vulns, updated if CVEs are found
+        "summary": f"{hostname} — {severity} risk.",
+        "lastScanned": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -470,7 +542,7 @@ async def broadcast_device_update(ar_summary: dict):
     })
 
 
-def _log_scan_summary(scan_dict: Dict[str, Any], ar_summary: Dict[str, Any], scan_id: str) -> None:
+def _log_scan_summary(scan_dict: Dict[str, Any], ar_summary: Dict[str, Any], scan_id: str, vuln_hits: list = []) -> None:
     SEV_PAD = {"critical": "CRITICAL", "high": "HIGH", "medium": "MEDIUM", "low": "LOW"}
 
     hostname  = scan_dict.get("hostname", "?")
@@ -491,7 +563,6 @@ def _log_scan_summary(scan_dict: Dict[str, Any], ar_summary: Dict[str, Any], sca
     node_i    = scan_dict.get("nodejs") or {}
     databases = scan_dict.get("databases") or []
     env_info  = scan_dict.get("environment") or {}
-    vuln_hits = check_known_vulnerabilities(scan_dict)
 
     pretty_os = os_info.get("pretty_name") or os_info.get("name") or "unknown OS"
     kernel    = os_info.get("kernel") or "?"
@@ -564,6 +635,35 @@ def _log_scan_summary(scan_dict: Dict[str, Any], ar_summary: Dict[str, Any], sca
     log.info(sep)
 
 
+_REPORTS_DIR = os.path.join(os.path.dirname(__file__), "logs", "reports")
+
+
+def _save_report(hostname: str, ts: datetime, ar_summary: dict, vuln_hits: list) -> None:
+    try:
+        os.makedirs(_REPORTS_DIR, exist_ok=True)
+        safe_host = hostname.replace(":", "-").replace("/", "-")
+        ts_str    = ts.strftime("%Y-%m-%dT%H-%M-%S")
+        path      = os.path.join(_REPORTS_DIR, f"{safe_host}_{ts_str}.json")
+
+        report = {
+            "hostname":    hostname,
+            "scannedAt":   ts.isoformat(),
+            "severity":    ar_summary.get("severity"),
+            "os":          ar_summary.get("os"),
+            "openPorts":   ar_summary.get("openPorts", []),
+            "findings":    ar_summary.get("findings", []),
+            "cveHits":     vuln_hits,
+            "summary":     ar_summary.get("summary"),
+        }
+
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, default=str)
+
+        log.info("  Report    : %s ✓", path)
+    except Exception as e:
+        log.warning("_save_report failed: %s", e)
+
+
 @app.get("/")
 async def root():
     return {
@@ -586,6 +686,16 @@ async def health():
             "error": str(e)
         }
 
+@app.delete("/api/devices")
+async def clear_devices():
+    """Clears all devices from the database. Called at the start of a new scan session."""
+    try:
+        result = await db.devices.delete_many({})
+        return {"status": "ok", "deleted_count": result.deleted_count}
+    except Exception as e:
+        log.error("Failed to clear devices: %s", e)
+        return {"status": "error", "error": str(e)}
+
 
 @app.post("/api/scan")
 async def ingest_scan(scan: DeviceScan):
@@ -595,6 +705,62 @@ async def ingest_scan(scan: DeviceScan):
         now = datetime.now(timezone.utc)
 
         ar_summary = build_ar_summary(scan_dict)
+
+        # Live CVE lookup — enriches ar_summary before saving / broadcasting
+        vuln_hits = await check_osv_vulnerabilities(scan_dict)
+        _sev_rank = {"critical": 3, "high": 2, "medium": 1, "low": 0}
+
+        if vuln_hits:
+            # Strip fix data — recommendations are only populated by /api/analyze/{hostname}
+            stored_hits = [{k: v for k, v in h.items() if k not in ("fix_version", "recommended_command")}
+                           for h in vuln_hits]
+            ar_summary["vulnerabilityMatches"] = stored_hits
+
+            # Escalate severity if any CVE is worse than the heuristic result
+            cve_max  = max(_sev_rank.get(v["severity"], 0) for v in vuln_hits)
+            cur_rank = _sev_rank.get(ar_summary.get("severity", "low"), 0)
+            if cve_max > cur_rank:
+                new_sev = ["low", "medium", "high", "critical"][cve_max]
+                ar_summary["severity"]    = new_sev
+                ar_summary["statusColor"] = {"critical": "red", "high": "red",
+                                              "medium": "amber", "low": "green"}.get(new_sev, "gray")
+
+            # Group findings by package — one card line per affected package, not per CVE
+            pkg_groups: dict = {}
+            for v in vuln_hits:
+                key = (v["package"], v["version"], v["source"])
+                pkg_groups.setdefault(key, []).append(v)
+
+            cve_findings = []
+            for (pkg, ver, src), cves in sorted(
+                pkg_groups.items(),
+                key=lambda x: -max(_sev_rank.get(c["severity"], 0) for c in x[1]),
+            ):
+                worst = max(cves, key=lambda c: _sev_rank.get(c["severity"], 0))["severity"]
+                n = len(cves)
+                cve_findings.append({
+                    "title":          f"{pkg} {ver} — {n} CVE{'s' if n > 1 else ''}",
+                    "severity":       worst,
+                    "detail":         f"{n} known {'vulnerability' if n == 1 else 'vulnerabilities'} ({src})",
+                    "recommendation": None,
+                })
+
+            ar_summary["findings"] = cve_findings + (ar_summary.get("findings") or [])
+
+            # Dynamic summary — reflects actual CVE count, not heuristic
+            n_cve = len(vuln_hits)
+            n_pkg = len(pkg_groups)
+            final_sev = ar_summary["severity"]
+            ar_summary["summary"] = (
+                f"{n_cve} CVE{'s' if n_cve > 1 else ''} across {n_pkg} "
+                f"package{'s' if n_pkg > 1 else ''} — {final_sev.upper()} risk"
+            )
+            ar_summary["vulns"] = n_cve + len(ar_summary.get("findings", []))
+        else:
+            ar_summary["vulnerabilityMatches"] = []
+            final_sev = ar_summary.get("severity", "low")
+            ar_summary["summary"] = f"{scan.hostname} — {final_sev} risk, no known CVEs"
+            ar_summary["vulns"] = len(ar_summary.get("findings", []))
 
         raw_doc = {
             "hostname": scan.hostname,
@@ -610,7 +776,7 @@ async def ingest_scan(scan: DeviceScan):
         insert_result = await db.device_scans.insert_one(raw_doc)
 
         await db.devices.update_one(
-            {"hostname": scan.hostname},
+            {"deviceId": ar_summary["deviceId"]},
             {
                 "$set": {
                     "hostname": scan.hostname,
@@ -628,7 +794,8 @@ async def ingest_scan(scan: DeviceScan):
 
         await broadcast_device_update(ar_summary)
 
-        _log_scan_summary(scan_dict, ar_summary, str(insert_result.inserted_id))
+        _log_scan_summary(scan_dict, ar_summary, str(insert_result.inserted_id), vuln_hits)
+        _save_report(scan.hostname, now, ar_summary, vuln_hits)
 
         return {
             "success": True,
@@ -650,7 +817,18 @@ async def analyze_device(hostname: str):
     raw_scan = device.get("latestRawScan") or {}
     ar_summary = device.get("arSummary") or {}
 
-    vulnerability_matches = check_known_vulnerabilities(raw_scan)
+    vulnerability_matches = await check_osv_vulnerabilities(raw_scan)
+
+    # Populate recommended_command now that the user explicitly requested analysis
+    for v in vulnerability_matches:
+        fv = v.pop("fix_version", None)
+        if fv:
+            if v["source"] == "python":
+                v["recommended_command"] = f"pip install --upgrade {v['package']}=={fv}"
+            elif v["source"] == "npm":
+                v["recommended_command"] = f"npm install {v['package']}@{fv}"
+            else:
+                v["recommended_command"] = f"sudo apt-get install --only-upgrade {v['package']}"
 
     ai_analysis = analyze_with_digitalocean_ai(
         raw_scan=raw_scan,
@@ -723,6 +901,41 @@ async def approve_action(request: ApprovalRequest):
         "status": action_doc["status"],
         "message": "Action recorded. SSH executor forwarding not connected yet."
     }
+
+
+# ── Scanner API ───────────────────────────────────────────────────────────────
+
+class ScannerRegistration(BaseModel):
+    ip: str
+
+ESP32_IP = None
+
+@app.post("/api/scanner/register")
+async def register_scanner(reg: ScannerRegistration):
+    global ESP32_IP
+    ESP32_IP = reg.ip
+    log.info("ESP32 Scanner registered with IP: %s", ESP32_IP)
+    return {"success": True, "ip": ESP32_IP}
+
+@app.post("/api/scan/trigger")
+async def trigger_scan():
+    global ESP32_IP
+    if not ESP32_IP:
+        log.warning("Scan trigger failed: ESP32 IP not registered")
+        raise HTTPException(status_code=400, detail="ESP32 Scanner IP not registered yet.")
+
+    log.info("Triggering scan on ESP32 at %s...", ESP32_IP)
+    try:
+        # Timeout is 15s since ESP32 blocks for 5s while scanning
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(f"http://{ESP32_IP}/api/scan")
+            resp.raise_for_status()
+            
+            # The ESP32 should return {"status": "complete", "devices_found": X}
+            return resp.json()
+    except Exception as e:
+        log.error("Failed to trigger scan on ESP32: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to trigger scan: {e}")
 
 
 @app.get("/api/devices")

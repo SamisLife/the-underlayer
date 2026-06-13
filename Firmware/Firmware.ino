@@ -22,6 +22,7 @@
 #include <SPI.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <WebServer.h>
 #include <Modulino.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
@@ -30,11 +31,11 @@
 #include <BLEAdvertisedDevice.h>
 
 // ── WiFi credentials ─────────────────────────────────────────────────
-const char* WIFI_SSID = "wifi_ssid";
-const char* WIFI_PASS = "wifi_pass";
+const char* WIFI_SSID = "YOUR_WIFI_SSID";
+const char* WIFI_PASS = "YOUR_WIFI_PASSWORD";
 
 // ── Backend endpoint (ssh_engine.py) ─────────────────────────────────
-const char* BACKEND_HOST = "10.0.0.x";   // ← set to your laptop's LAN IP
+const char* BACKEND_HOST = "10.0.0.228";   // ← set to your laptop's LAN IP
 const int   BACKEND_PORT = 8001;
 
 // ── Timing constants ──────────────────────────────────────────────────
@@ -57,7 +58,7 @@ Adafruit_ST7789 tft(TFT_CS, TFT_DC, TFT_RST);
 ModulinoKnob    knob;
 
 // ── BLE scanner ───────────────────────────────────────────────────────
-const int SCAN_SECS = 5;
+const int SCAN_SECS = 3;
 const int MAX_FOUND = 40;
 
 struct FoundDevice {
@@ -86,8 +87,8 @@ class ScanCallback : public BLEAdvertisedDeviceCallbacks {
     String nm = dev.getName().c_str();
     if (nm.length() == 0 && dev.haveManufacturerData()) {
       // Identify by manufacturer company ID when name is not advertised
-      std::string mfr = dev.getManufacturerData();
-      if (mfr.size() >= 2) {
+      String mfr = dev.getManufacturerData();
+      if (mfr.length() >= 2) {
         uint16_t company = (uint8_t)mfr[0] | ((uint16_t)(uint8_t)mfr[1] << 8);
         if      (company == 0x004C) nm = "(Apple)";
         else if (company == 0x0006) nm = "(Microsoft)";
@@ -135,6 +136,10 @@ void startWifiConnect() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 }
+
+WebServer server(80);
+
+void handleApiScan(); // Forward declaration
 
 // ── Backend POST ──────────────────────────────────────────────────────
 bool postStarted    = false;
@@ -227,16 +232,16 @@ void doBackendPost() {
 
 // ── Screen states ─────────────────────────────────────────────────────
 enum ScreenState {
+  SCREEN_WIFI,
   SCREEN_TARGETS,
   SCREEN_RANGE,
   SCREEN_SCAN_READY,
   SCREEN_SCANNING,
-  SCREEN_WIFI,
   SCREEN_POSTING,
   SCREEN_RESULTS
 };
 
-ScreenState screen = SCREEN_TARGETS;
+ScreenState screen = SCREEN_WIFI;
 
 // ── Target selector ───────────────────────────────────────────────────
 const char* targetLabels[] = {
@@ -778,6 +783,30 @@ void scanI2CBus() {
   if (found == 0) Serial.println("  None found.");
 }
 
+void doWiFiScan() {
+  Serial.println("Starting WiFi scan...");
+  int n = WiFi.scanNetworks(false, true); // sync scan, show hidden
+  for (int i = 0; i < n; ++i) {
+    if (foundCount >= MAX_FOUND) break;
+    FoundDevice& fd = foundDevices[foundCount];
+    String ssid = WiFi.SSID(i);
+    String bssid = WiFi.BSSIDstr(i);
+    bssid.toUpperCase();
+    
+    // Some routers have empty SSID, handle them gracefully
+    if (ssid.length() == 0) ssid = "(hidden)";
+    
+    ssid.toCharArray(fd.name, sizeof(fd.name));
+    bssid.toCharArray(fd.mac, sizeof(fd.mac));
+    fd.rssi = WiFi.RSSI(i);
+    fd.recognized = false;
+    fd.sshCapable = false;
+    foundCount++;
+  }
+  WiFi.scanDelete();
+  Serial.printf("WiFi scan found %d networks. Total devices: %d\n", n, foundCount);
+}
+
 // ── setup ─────────────────────────────────────────────────────────────
 void setup() {
   Serial.begin(115200);
@@ -801,7 +830,7 @@ void setup() {
   lastPosition = knob.get();
   lastPressed  = knob.isPressed();
 
-  // BLE init before WiFi — radio is shared; scanning with WiFi off gives better results
+  // BLE init before WiFi
   BLEDevice::init("SPECTER");
   pBLEScan = BLEDevice::getScan();
   pBLEScan->setAdvertisedDeviceCallbacks(&scanCB);
@@ -809,7 +838,49 @@ void setup() {
   pBLEScan->setInterval(100);
   pBLEScan->setWindow(99);
 
-  Serial.println("SPECTER ready.");
+  Serial.println("SPECTER ready. Connecting to WiFi...");
+  
+  server.on("/api/scan", HTTP_POST, handleApiScan);
+  
+  startWifiConnect();
+  screen = SCREEN_WIFI;
+  drawCurrentScreen();
+}
+
+void handleApiScan() {
+  Serial.println("Received API scan trigger!");
+  
+  scanAction = 0;
+  scanStartedMs = millis();
+  screen = SCREEN_SCANNING;
+  drawCurrentScreen();
+  startBLEScan();
+
+  // Block until scan is done, but keep updating the UI
+  while (scanRunning) {
+    if (millis() - lastDrawMs >= 200) {
+      drawCurrentScreen();
+      lastDrawMs = millis();
+    }
+    delay(10);
+  }
+
+  doWiFiScan();
+  scanDone = false; // consume flag so loop() doesn't double-trigger
+
+  // Post to backend synchronously before responding
+  drawCurrentScreen(); // Show scanning UI a bit longer
+  doBackendPost();
+
+  // Return success
+  String resp = "{\"status\":\"complete\",\"devices_found\":" + String(foundCount) + "}";
+  server.send(200, "application/json", resp);
+
+  // Skip POSTING screen since we already did it
+  postStarted = false;
+  postDone = true;
+  screen = SCREEN_RESULTS;
+  resultOffset = 0;
   drawCurrentScreen();
 }
 
@@ -836,8 +907,17 @@ void loop() {
   if (screen == SCREEN_SCANNING) {
     if (scanDone) {
       scanDone = false;
-      startWifiConnect();          // WiFi connects while we show the WiFi screen
-      screen    = SCREEN_WIFI;
+      
+      doWiFiScan();
+
+      // If we got here from an API trigger, handleApiScan() will set the screen 
+      // back to SCREEN_WIFI or wherever it needs to go, but if this was a physical 
+      // knob scan, we transition to SCREEN_POSTING to send results to the backend.
+      if (!postStarted && !postDone) {
+         postStarted = false;
+         postDone = false;
+         screen = SCREEN_POSTING;
+      }
       needsDraw = true;
     } else if (millis() - lastDrawMs >= 200) {
       needsDraw = true;            // keep animation alive
@@ -850,6 +930,15 @@ void loop() {
       wl_status_t st = WiFi.status();
       if (st == WL_CONNECTED) {
         wifiConnected = true;  wifiDone = true;  wifiResultMs = millis();
+        
+        // Register IP with Backend
+        HTTPClient http;
+        http.begin(String("http://") + BACKEND_HOST + ":8000/api/scanner/register");
+        http.addHeader("Content-Type", "application/json");
+        http.POST("{\"ip\":\"" + WiFi.localIP().toString() + "\"}");
+        http.end();
+
+        server.begin(); // Start web server
         needsDraw = true;
       } else if (st == WL_NO_SSID_AVAIL || st == WL_CONNECT_FAILED) {
         wifiConnected = false; wifiDone = true;  wifiResultMs = millis();
@@ -863,16 +952,8 @@ void loop() {
     } else {
       unsigned long waitMs = wifiConnected ? WIFI_SUCCESS_DELAY : WIFI_FAIL_DELAY;
       if (millis() - wifiResultMs >= waitMs) {
-        if (wifiConnected) {
-          // Connected: go to posting screen
-          postStarted = false;
-          postDone    = false;
-          screen      = SCREEN_POSTING;
-        } else {
-          // Failed: skip posting, go straight to results
-          screen       = SCREEN_RESULTS;
-          resultOffset = 0;
-        }
+        // Always go to TARGETS after WiFi (connected or failed)
+        screen = SCREEN_TARGETS;
         needsDraw = true;
       } else if (millis() - lastDrawMs >= 300) {
         needsDraw = true;
@@ -883,11 +964,9 @@ void loop() {
   // ── POSTING ───────────────────────────────────────────────────────
   if (screen == SCREEN_POSTING) {
     if (!postStarted) {
-      // Frame 1: draw "Sending..." first, then POST on next iteration
       postStarted = true;
       needsDraw   = true;
     } else if (!postDone) {
-      // Frame 2: blocking HTTP POST (freezes ~0.5–3s on LAN)
       doBackendPost();
       postResultMs = millis();
       needsDraw    = true;
@@ -903,6 +982,10 @@ void loop() {
   if (needsDraw) {
     drawCurrentScreen();
     lastDrawMs = millis();
+  }
+
+  if (wifiConnected) {
+    server.handleClient();
   }
 
   delay(20);

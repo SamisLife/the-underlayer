@@ -1,23 +1,27 @@
 [
   {
-    "_comment": "Add one entry per target machine. bt_mac (exact, uppercase) takes priority over bt_name (substring match).",
-    "bt_name": "ubuntu",
+    "bt_name": "Linux_name",
     "bt_mac": "",
-    "hostname": "192.168.1.100",
-    "display_name": "Dev Box",
+    "display_name": "Linux",
+    "can_ssh": true,
+    "hostname": "10.0.0.x",
+    "device_type": "laptop",
     "ssh_port": 22,
-    "ssh_user": null,
-    "ssh_password": null,
-    "ssh_key_path": null
+    "ssh_user": "user",
+    "ssh_password": "password"
   },
   {
-    "bt_name": "raspberrypi",
+    "network_name": "router_name",
+    "network_password": "router_password",
+    "admin_network_name": "admin",
+    "admin_network_password": "admin_network_password",
     "bt_mac": "",
-    "hostname": "192.168.1.101",
-    "display_name": "Raspberry Pi",
+    "display_name": "Router",
+    "can_ssh": false,
+    "hostname": "",
+    "device_type": "router",
     "ssh_port": 22,
-    "ssh_user": "pi",
-    "ssh_password": null,
-    "ssh_key_path": null
+    "ssh_user": "",
+    "ssh_password": ""
   }
 ]

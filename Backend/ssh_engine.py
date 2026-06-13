@@ -101,6 +101,7 @@ class MatchedDevice(BaseModel):
     ssh_port:     int             = 22
     ssh_user:     Optional[str]   = None
     ssh_password: Optional[str]   = None
+    network_password: Optional[str] = None
     ssh_key_path: Optional[str]   = None
     distance_m:   Optional[float] = None
 
@@ -114,15 +115,20 @@ def estimate_distance(rssi: Optional[int]) -> Optional[float]:
 
 
 def _lookup_host(bt: BluetoothDevice) -> Optional[Dict]:
-    """Match a BT device against hosts.json — MAC exact match takes priority, then name substring."""
+    """Match a BT/Wi-Fi device against hosts.json — MAC exact match takes priority, then name substring."""
     name_lower = (bt.name or "").lower()
     mac_upper  = (bt.mac  or "").upper().replace("-", ":")
 
     for host in HOSTS:
         if host.get("bt_mac") and host["bt_mac"].upper() == mac_upper:
             return host
-        if host.get("bt_name") and host["bt_name"].lower() in name_lower:
-            return host
+            
+        if host.get("device_type") == "router":
+            if host.get("network_name") and host["network_name"].lower() in name_lower:
+                return host
+        else:
+            if host.get("bt_name") and host["bt_name"].lower() in name_lower:
+                return host
     return None
 
 
@@ -132,16 +138,18 @@ def build_matched_device(bt: BluetoothDevice) -> Optional[MatchedDevice]:
         return None
 
     return MatchedDevice(
-        bt_name      = bt.name,
-        bt_mac       = bt.mac,
-        rssi         = bt.rssi,
-        ssh_capable  = host.get("can_ssh", False),
-        hostname     = host.get("hostname"),
-        ssh_port     = host.get("ssh_port", SSH_PORT),
-        ssh_user     = host.get("ssh_user"),
-        ssh_password = host.get("ssh_password"),
-        ssh_key_path = host.get("ssh_key_path"),
-        distance_m   = estimate_distance(bt.rssi),
+        bt_name          = bt.name,
+        bt_mac           = bt.mac,
+        rssi             = bt.rssi,
+        device_type      = host.get("device_type", "unknown"),
+        ssh_capable      = host.get("can_ssh", False),
+        hostname         = host.get("hostname"),
+        ssh_port         = host.get("ssh_port", SSH_PORT),
+        ssh_user         = host.get("ssh_user"),
+        ssh_password     = host.get("ssh_password"),
+        network_password = host.get("network_password"),
+        ssh_key_path     = host.get("ssh_key_path"),
+        distance_m       = estimate_distance(bt.rssi),
     )
 
 # ── SSH Scanner ───────────────────────────────────────────────────────────────
@@ -446,7 +454,7 @@ def build_scan_document(
     )
     return {
         "hostname":         hostname,
-        "device_id":        matched.bt_mac or matched.hostname,
+        "device_id":        matched.bt_mac or matched.bt_name or matched.hostname,
         "mac":              matched.bt_mac,
         "ip":               matched.hostname,
         "position": {
@@ -597,6 +605,19 @@ def bluetooth_scan(
     """
     results = []
 
+    # Log all devices seen by ESP32 (BLE + Wi-Fi)
+    log.info("ESP32 scan received %d devices:", len(payload.devices))
+    for bt in payload.devices:
+        log.info("  - %s (MAC: %s, RSSI: %s)", bt.name, bt.mac, bt.rssi)
+
+    # Clear previous scan results in the relay database
+    try:
+        requests.delete(f"{RELAY_URL}/api/devices", timeout=5)
+        log.info("Cleared previous devices in Relay MongoDB")
+    except Exception as e:
+        log.warning("Failed to clear relay database before scan: %s", e)
+
+    ssh_targets = []
     for bt in payload.devices:
         matched = build_matched_device(bt)
 
@@ -620,37 +641,41 @@ def bluetooth_scan(
             "distance_m":  matched.distance_m,
         }
 
+        # Always forward a stub to relay instantly so AR displays it immediately
+        stub: Dict[str, Any] = {
+            "hostname":  matched.bt_name or matched.bt_mac or "unknown",
+            "device_id": matched.bt_mac or matched.bt_name,
+            "mac":       matched.bt_mac,
+            "ip":        matched.hostname if matched.ssh_capable else None,
+            "position": {
+                "distance_m": matched.distance_m,
+                "rssi":       float(matched.rssi) if matched.rssi is not None else None,
+            } if matched.rssi is not None else None,
+            "scan_metadata": {
+                "scan_time":         datetime.now(timezone.utc).isoformat(),
+                "collector_version": ENGINE_VERSION,
+            },
+            "device_type": matched.device_type,
+            "vendor":      matched.vendor,
+            "bt_name":     matched.bt_name,
+        }
+        post_to_relay(stub)
+
+        # Collect SSH capable devices for later queuing
         if matched.ssh_capable and matched.hostname:
-            background_tasks.add_task(run_ssh_scan, matched)
+            ssh_targets.append(matched)
             entry["ssh_scan"] = "queued"
             entry["hostname"] = matched.hostname
-
         elif matched.ssh_capable and not matched.hostname:
             entry["ssh_scan"] = "no_host_record"
-
         else:
-            # Non-SSH device: forward stub to relay so AR displays it
-            stub: Dict[str, Any] = {
-                "hostname":  matched.bt_name or matched.bt_mac or "unknown",
-                "device_id": matched.bt_mac or matched.bt_name,
-                "mac":       matched.bt_mac,
-                "ip":        None,
-                "position": {
-                    "distance_m": matched.distance_m,
-                    "rssi":       float(matched.rssi) if matched.rssi is not None else None,
-                } if matched.rssi is not None else None,
-                "scan_metadata": {
-                    "scan_time":         datetime.now(timezone.utc).isoformat(),
-                    "collector_version": ENGINE_VERSION,
-                },
-                "device_type": matched.device_type,
-                "vendor":      matched.vendor,
-                "bt_name":     matched.bt_name,
-            }
-            background_tasks.add_task(post_to_relay, stub)
             entry["ssh_scan"] = "not_applicable"
 
         results.append(entry)
+
+    # Queue SSH scans AFTER all stubs have been queued, so stubs don't get blocked
+    for target in ssh_targets:
+        background_tasks.add_task(run_ssh_scan, target)
 
     return {
         "received":   len(payload.devices),
