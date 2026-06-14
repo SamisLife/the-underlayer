@@ -139,6 +139,7 @@ class EnvironmentInfo(BaseModel):
 class ScanMetadata(BaseModel):
     scan_time: Optional[str] = None
     collector_version: Optional[str] = None
+    ssh_status: Optional[str] = None
 
 
 class DeviceScan(BaseModel):
@@ -148,6 +149,8 @@ class DeviceScan(BaseModel):
     device_type: Optional[str] = None
     mac: Optional[str] = None
     ip: Optional[str] = None
+    bt_name: Optional[str] = None
+    vendor: Optional[str] = None
     position: Optional[Dict[str, float]] = None
 
     hostname: str
@@ -419,7 +422,8 @@ def build_ar_summary(scan: Dict[str, Any]) -> Dict[str, Any]:
         "findings": findings,
         "vulns": len(findings), # Baseline vulns, updated if CVEs are found
         "summary": f"{hostname} — {severity} risk.",
-        "lastScanned": datetime.now(timezone.utc).isoformat()
+        "lastScanned": datetime.now(timezone.utc).isoformat(),
+        "scanMetadata": scan.get("scan_metadata") or {}
     }
 
 
@@ -456,7 +460,7 @@ AR device card:
 Known vulnerability matches:
 {json.dumps(vulnerability_matches, indent=2)}
 
-Raw device scan:
+Raw device scan (Includes OS and environment details):
 {json.dumps(raw_scan, indent=2)}
 
 Return exactly this JSON structure:
@@ -467,12 +471,12 @@ Return exactly this JSON structure:
     "short reason 1",
     "short reason 2"
   ],
-  "actions": [
+  "problems": [
     {{
-      "label": "human readable action",
-      "command": "safe remediation command",
-      "dangerLevel": "low|medium|high",
-      "requiresApproval": true
+      "priority": "Critical|High|Medium|Low",
+      "description": "Short description of the problem",
+      "fixCommand": "exact, highly efficient remediation command",
+      "fixLabel": "Human readable action"
     }}
   ]
 }}
@@ -480,9 +484,29 @@ Return exactly this JSON structure:
 Rules:
 - Keep all text short for AR glasses.
 - Do not invent real CVEs.
-- Prefer commands from known vulnerability matches.
 - Do not use destructive commands such as rm -rf, shutdown, reboot, mkfs, userdel.
 - Every action must require human approval.
+
+CRITICAL INSTRUCTIONS FOR fixCommand GENERATION:
+You must dynamically generate the absolute most efficient and reliable `fixCommand` based on the exact OS environment found in the "Raw device scan". You must evaluate the `os` object (e.g. Kali GNU/Linux, Debian, Ubuntu) and formulate the exact appropriate command.
+
+1. Python / pip Vulnerabilities:
+If the OS is a modern Debian-based Linux (e.g. Kali, Ubuntu 24.04+, Debian 12+) and you need to upgrade a Python package, you MUST bypass PEP 668 (externally managed environment) and avoid the `uninstall-no-record-file` error.
+Your command MUST be formatted exactly like this:
+`sudo -H pip3 install --upgrade --ignore-installed --break-system-packages <package>==<fix_version>`
+Do NOT use `pip install`. Do NOT forget `--break-system-packages` or `--ignore-installed`.
+
+2. NPM Vulnerabilities:
+Global NPM installations require `sudo` to bypass permission errors.
+Your command MUST be formatted exactly like this:
+`sudo npm install -g <package>@<fix_version>`
+
+3. APT/System Packages:
+When upgrading a system package via `apt-get`, you must ensure it does not prompt for user input.
+Your command MUST be formatted exactly like this:
+`sudo apt-get install --only-upgrade -y <package>`
+
+You must read the `os` and `environment` fields from the raw device scan to deduce the OS type, and combine that with the `fix_version` provided in the vulnerability matches to synthesize the exact, perfectly formed command.
 """
 
     payload = {
@@ -492,7 +516,7 @@ Rules:
     }
 
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        response = requests.post(url, headers=headers, json=payload, timeout=90)
         response.raise_for_status()
 
         result = response.json()
@@ -512,6 +536,40 @@ Rules:
             }
 
     except Exception as e:
+        google_api_key = os.getenv("GOOGLE_API_KEY")
+        if google_api_key:
+            try:
+                gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={google_api_key}"
+                gemini_payload = {
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"responseMimeType": "application/json"}
+                }
+                gemini_resp = requests.post(gemini_url, json=gemini_payload, timeout=90)
+                gemini_resp.raise_for_status()
+                gemini_result = gemini_resp.json()
+                content = gemini_result["candidates"][0]["content"]["parts"][0]["text"]
+                
+                try:
+                    parsed = json.loads(content)
+                    parsed["enabled"] = True
+                    return parsed
+                except Exception:
+                    return {
+                        "enabled": True,
+                        "risk_summary": content,
+                        "recommendation": "Review AI response.",
+                        "reasoning": [],
+                        "actions": []
+                    }
+            except Exception as gemini_e:
+                return {
+                    "enabled": False,
+                    "risk_summary": "AI analysis failed.",
+                    "recommendation": "Use rule-based findings for now.",
+                    "reasoning": [f"DO Error: {e}", f"Gemini Error: {gemini_e}"],
+                    "actions": []
+                }
+                
         return {
             "enabled": False,
             "risk_summary": "AI analysis failed.",
@@ -702,6 +760,7 @@ async def ingest_scan(scan: DeviceScan):
     try:
         log.info("Relay received  %s  (IP: %s  MAC: %s)", scan.hostname, scan.ip, scan.mac)
         scan_dict = scan.model_dump()
+        print(f"DEBUG INGEST: {scan_dict.get('hostname')} - BT_NAME: {scan_dict.get('bt_name')}")
         now = datetime.now(timezone.utc)
 
         ar_summary = build_ar_summary(scan_dict)
@@ -732,17 +791,22 @@ async def ingest_scan(scan: DeviceScan):
                 pkg_groups.setdefault(key, []).append(v)
 
             cve_findings = []
+            source_counts = {}
             for (pkg, ver, src), cves in sorted(
                 pkg_groups.items(),
                 key=lambda x: -max(_sev_rank.get(c["severity"], 0) for c in x[1]),
             ):
                 worst = max(cves, key=lambda c: _sev_rank.get(c["severity"], 0))["severity"]
                 n = len(cves)
+                
+                src_key = (src or "OS").upper()
+                source_counts[src_key] = source_counts.get(src_key, 0) + n
+                
                 cve_findings.append({
-                    "title":          f"{pkg} {ver} — {n} CVE{'s' if n > 1 else ''}",
+                    "package":        pkg,
+                    "cve_count":      n,
                     "severity":       worst,
-                    "detail":         f"{n} known {'vulnerability' if n == 1 else 'vulnerabilities'} ({src})",
-                    "recommendation": None,
+                    "source":         src,
                 })
 
             ar_summary["findings"] = cve_findings + (ar_summary.get("findings") or [])
@@ -756,8 +820,10 @@ async def ingest_scan(scan: DeviceScan):
                 f"package{'s' if n_pkg > 1 else ''} — {final_sev.upper()} risk"
             )
             ar_summary["vulns"] = n_cve + len(ar_summary.get("findings", []))
+            ar_summary["sourceCounts"] = source_counts
         else:
             ar_summary["vulnerabilityMatches"] = []
+            ar_summary["sourceCounts"] = {}
             final_sev = ar_summary.get("severity", "low")
             ar_summary["summary"] = f"{scan.hostname} — {final_sev} risk, no known CVEs"
             ar_summary["vulns"] = len(ar_summary.get("findings", []))
@@ -807,6 +873,7 @@ async def ingest_scan(scan: DeviceScan):
         raise
 
 
+@app.get("/api/analyze/{hostname}")
 @app.post("/api/analyze/{hostname}")
 async def analyze_device(hostname: str):
     device = await db.devices.find_one({"hostname": hostname}, {"_id": 0})
@@ -817,18 +884,11 @@ async def analyze_device(hostname: str):
     raw_scan = device.get("latestRawScan") or {}
     ar_summary = device.get("arSummary") or {}
 
-    vulnerability_matches = await check_osv_vulnerabilities(raw_scan)
-
-    # Populate recommended_command now that the user explicitly requested analysis
-    for v in vulnerability_matches:
-        fv = v.pop("fix_version", None)
-        if fv:
-            if v["source"] == "python":
-                v["recommended_command"] = f"pip install --upgrade {v['package']}=={fv}"
-            elif v["source"] == "npm":
-                v["recommended_command"] = f"npm install {v['package']}@{fv}"
-            else:
-                v["recommended_command"] = f"sudo apt-get install --only-upgrade {v['package']}"
+    vulnerability_matches = device.get("vulnerabilityMatches")
+    if vulnerability_matches is None:
+        vulnerability_matches = ar_summary.get("vulnerabilityMatches")
+    if vulnerability_matches is None:
+        vulnerability_matches = await check_osv_vulnerabilities(raw_scan)
 
     ai_analysis = analyze_with_digitalocean_ai(
         raw_scan=raw_scan,
@@ -836,13 +896,15 @@ async def analyze_device(hostname: str):
         vulnerability_matches=vulnerability_matches
     )
 
+    log.info(f"AI ANALYSIS RESULT for {hostname}: {ai_analysis}")
+
     updated_ar_summary = {
         **ar_summary,
         "vulnerabilityMatches": vulnerability_matches,
         "aiSummary": ai_analysis.get("risk_summary"),
         "aiRecommendation": ai_analysis.get("recommendation"),
         "aiReasoning": ai_analysis.get("reasoning", []),
-        "actions": ai_analysis.get("actions", [])
+        "problems": ai_analysis.get("problems", [])
     }
 
     await db.devices.update_one(
@@ -882,6 +944,25 @@ async def approve_action(request: ApprovalRequest):
         "sentToSshEngine": False
     }
 
+    message = "Action recorded."
+
+    if request.approved:
+        try:
+            resp = requests.post(
+                "http://localhost:8001/api/ssh/run-command",
+                json={"hostname": request.hostname, "command": request.command},
+                timeout=35
+            )
+            data = resp.json()
+            action_doc["sshOutput"] = data.get("stdout") or data.get("error")
+            action_doc["sentToSshEngine"] = True
+            action_doc["sshSuccess"] = data.get("ok", False)
+            message = "Action executed."
+        except Exception as e:
+            action_doc["sshOutput"] = str(e)
+            action_doc["sshSuccess"] = False
+            message = "Action failed to execute."
+
     result = await db.actions.insert_one(action_doc)
 
     await broadcast_event({
@@ -891,7 +972,9 @@ async def approve_action(request: ApprovalRequest):
             "actionLabel": request.actionLabel,
             "command": request.command,
             "approved": request.approved,
-            "status": action_doc["status"]
+            "status": action_doc["status"],
+            "sshSuccess": action_doc.get("sshSuccess", False),
+            "sshOutput": action_doc.get("sshOutput")
         }
     })
 
@@ -899,7 +982,8 @@ async def approve_action(request: ApprovalRequest):
         "success": True,
         "actionId": str(result.inserted_id),
         "status": action_doc["status"],
-        "message": "Action recorded. SSH executor forwarding not connected yet."
+        "message": message,
+        "sshOutput": action_doc.get("sshOutput")
     }
 
 
@@ -917,6 +1001,7 @@ async def register_scanner(reg: ScannerRegistration):
     log.info("ESP32 Scanner registered with IP: %s", ESP32_IP)
     return {"success": True, "ip": ESP32_IP}
 
+@app.get("/api/scan/trigger")
 @app.post("/api/scan/trigger")
 async def trigger_scan():
     global ESP32_IP
@@ -956,7 +1041,9 @@ async def get_ar_devices():
     cursor = db.devices.find({}, {"_id": 0, "arSummary": 1})
     async for device in cursor:
         if "arSummary" in device:
-            ar_devices.append(device["arSummary"])
+            summary = dict(device["arSummary"])
+            summary.pop("problems", None)
+            ar_devices.append(summary)
 
     return ar_devices
 

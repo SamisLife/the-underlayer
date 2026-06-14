@@ -197,12 +197,18 @@ class SSHScanner:
         if not self._client:
             return ""
         try:
-            _, stdout, _ = self._client.exec_command(cmd, timeout=timeout)
+            _, stdout, stderr = self._client.exec_command(cmd, timeout=timeout)
             stdout.channel.settimeout(timeout)
-            return stdout.read().decode("utf-8", errors="replace").strip()
+            out = stdout.read().decode("utf-8", errors="replace").strip()
+            err = stderr.read().decode("utf-8", errors="replace").strip()
+            if err and not out:
+                return err
+            elif err and out:
+                return f"{out}\n{err}"
+            return out
         except Exception as exc:
             log.debug("Command failed [%.60s]: %s", cmd, exc)
-            return ""
+            return f"Error/Timeout: {exc}"
 
     def close(self):
         if self._client:
@@ -457,6 +463,9 @@ def build_scan_document(
         "device_id":        matched.bt_mac or matched.bt_name or matched.hostname,
         "mac":              matched.bt_mac,
         "ip":               matched.hostname,
+        "bt_name":          matched.bt_name,
+        "device_type":      matched.device_type,
+        "vendor":           matched.vendor,
         "position": {
             "distance_m": matched.distance_m,
             "rssi":       float(matched.rssi) if matched.rssi is not None else None,
@@ -562,6 +571,8 @@ def run_ssh_scan(matched: MatchedDevice) -> bool:
         scanner.close()
 
     doc = build_scan_document(raw, matched, scan_start)
+    doc.setdefault("scan_metadata", {})["ssh_status"] = "completed"
+    
     log.info("SSH scan done   %s — collected %d commands", matched.hostname, len(raw))
     save_scan_log(doc)
     return post_to_relay(doc)
@@ -641,6 +652,14 @@ def bluetooth_scan(
             "distance_m":  matched.distance_m,
         }
 
+        # Compute the ssh status for the stub
+        if matched.ssh_capable and matched.hostname:
+            stub_ssh_status = "queued"
+        elif matched.ssh_capable and not matched.hostname:
+            stub_ssh_status = "no_host_record"
+        else:
+            stub_ssh_status = "not_applicable"
+
         # Always forward a stub to relay instantly so AR displays it immediately
         stub: Dict[str, Any] = {
             "hostname":  matched.bt_name or matched.bt_mac or "unknown",
@@ -654,6 +673,7 @@ def bluetooth_scan(
             "scan_metadata": {
                 "scan_time":         datetime.now(timezone.utc).isoformat(),
                 "collector_version": ENGINE_VERSION,
+                "ssh_status":        stub_ssh_status,
             },
             "device_type": matched.device_type,
             "vendor":      matched.vendor,
@@ -692,6 +712,12 @@ class DirectScanRequest(BaseModel):
     password:     Optional[str]   = None
     key_path:     Optional[str]   = None
     forward_to_relay: bool        = False
+
+
+class RunCommandRequest(BaseModel):
+    hostname: str
+    command: str
+
 
 
 @app.post("/api/debug/scan-host")
@@ -741,6 +767,65 @@ def debug_scan_host(req: DirectScanRequest):
         doc["_forwarded_to_relay"] = ok
 
     return {"ok": True, "log": str(log_path), "scan": doc}
+
+
+@app.post("/api/ssh/run-command")
+def run_command(req: RunCommandRequest):
+    """
+    Run an arbitrary command on the target host via SSH.
+    It looks up the credentials from hosts.json via the hostname.
+    """
+    bt_mock = BluetoothDevice(name=req.hostname, mac=req.hostname)
+    matched = build_matched_device(bt_mock)
+    
+    if not matched:
+        # Fallback to direct hostname match if bt_mock fails
+        for h in HOSTS:
+            if h.get("hostname") == req.hostname:
+                matched = MatchedDevice(
+                    hostname=h.get("hostname"),
+                    ssh_port=h.get("ssh_port", SSH_PORT),
+                    ssh_user=h.get("ssh_user"),
+                    ssh_password=h.get("ssh_password"),
+                    ssh_key_path=h.get("ssh_key_path"),
+                )
+                break
+                
+    if not matched:
+        return {"ok": False, "error": f"Host '{req.hostname}' not found in hosts.json"}
+
+    scanner = SSHScanner(
+        host     = matched.hostname,
+        port     = matched.ssh_port,
+        username = matched.ssh_user     or "ubuntu",
+        password = matched.ssh_password or "",
+        key_path = matched.ssh_key_path or "",
+    )
+
+    if not scanner.connect():
+        return {"ok": False, "error": "SSH connection failed"}
+
+    try:
+        cmd_to_run = req.command
+        # If using sudo and a password is known, inject it via stdin using -S
+        if "sudo " in cmd_to_run and matched.ssh_password:
+            # Replace 'sudo ' with 'echo "password" | sudo -S '
+            cmd_to_run = cmd_to_run.replace("sudo ", f"echo '{matched.ssh_password}' | sudo -S ", 1)
+            
+        log.info("Executing remote command on %s: %s", req.hostname, cmd_to_run.replace(f"'{matched.ssh_password}'", "'***'"))
+        
+        stdout = scanner.run(cmd_to_run, timeout=30)
+        
+        if stdout:
+            log.info("Command output:\n%s", stdout)
+        else:
+            log.info("Command completed with no output.")
+            
+        return {"ok": True, "stdout": stdout}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+    finally:
+        scanner.close()
 
 
 if __name__ == "__main__":

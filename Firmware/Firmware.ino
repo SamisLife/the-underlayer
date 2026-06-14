@@ -1,21 +1,21 @@
 // =====================================================================
-//  SPECTER — BLE scanner + TFT UI + WiFi + HTTP POST to backend
+//  SPECTER75 — BLE scanner + TFT UI + WiFi + HTTP POST to backend
 //
 //  Wiring
 //  TFT ST7789 (SPI):           Modulino Knob (I2C):
-//    VCC  → 3.3V                 3V3  → 3.3V
-//    GND  → GND                  GND  → GND
-//    SCL  → GPIO 18 (SPI SCK)    SDA  → GPIO 21
-//    SDA  → GPIO 23 (SPI MOSI)   SCL  → GPIO 22
-//    CS   → GPIO 5
-//    DC   → GPIO 15
-//    RST  → GPIO 4
+//    VCC (Green)  → 3.3V                 3V3  → 3.3V
+//    GND (Brown)  → GND                  GND  → GND
+//    SCL (Yellow)  → GPIO 18 (SPI SCK)    SDA  → GPIO 21
+//    SDA (Green)  → GPIO 23 (SPI MOSI)   SCL  → GPIO 22
+//    CS (White)   → GPIO 5
+//    DC (Purple)   → GPIO 15
+//    RST (Blue)  → GPIO 4
 //
 //  Libraries:
 //    Adafruit ST7789 · Adafruit GFX · Modulino / Arduino_Modulino
 //    ESP32 BLE Arduino (built-in with esp32 board package)
 //
-//  Partition scheme: Tools → Partition Scheme → Huge APP (3MB No OTA)
+//  Partition scheme: Tools → Partition Scheme z Huge APP (3MB No OTA)
 // =====================================================================
 
 #include <Wire.h>
@@ -31,8 +31,8 @@
 #include <BLEAdvertisedDevice.h>
 
 // ── WiFi credentials ─────────────────────────────────────────────────
-const char* WIFI_SSID = "YOUR_WIFI_SSID";
-const char* WIFI_PASS = "YOUR_WIFI_PASSWORD";
+const char* WIFI_SSID = "WIFI_SSID";
+const char* WIFI_PASS = "WIFI_PASS";
 
 // ── Backend endpoint (ssh_engine.py) ─────────────────────────────────
 const char* BACKEND_HOST = "10.0.0.228";   // ← set to your laptop's LAN IP
@@ -161,7 +161,7 @@ String escapeName(const char* s) {
 }
 
 String buildScanPayload() {
-  String j = "{\"scanner_id\":\"specter-01\",\"devices\":[";
+  String j = "{\"scanner_id\":\"underlayer-01\",\"devices\":[";
   for (int i = 0; i < (int)foundCount; i++) {
     if (i > 0) j += ",";
     j += "{\"name\":\"" + escapeName(foundDevices[i].name) + "\",";
@@ -310,7 +310,7 @@ void drawFrame(const char* title, const char* subtitle) {
   tft.drawFastHLine(0, 34, screenW(), C_ACCENT);
   setText(C_ACCENT, 2);
   tft.setCursor(12, 8);
-  tft.print("SPECTER");
+  tft.print("UNDERLAYER");
   setText(C_MUTED, 1);
   tft.setCursor(218, 9);
   tft.print(title);
@@ -820,7 +820,7 @@ void setup() {
   digitalWrite(TFT_CS, HIGH);
 
   tft.init(240, 320);
-  tft.setRotation(1);
+  tft.setRotation(3);
   tft.setTextWrap(false);
   tft.fillScreen(C_BG);
 
@@ -838,7 +838,7 @@ void setup() {
   pBLEScan->setInterval(100);
   pBLEScan->setWindow(99);
 
-  Serial.println("SPECTER ready. Connecting to WiFi...");
+  Serial.println("UNDERLAYER ready. Connecting to WiFi...");
   
   server.on("/api/scan", HTTP_POST, handleApiScan);
   
