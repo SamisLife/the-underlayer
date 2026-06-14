@@ -9,6 +9,7 @@ import {Device} from "./DeviceTypes"
 
 export const MOCK_DEVICES: Device[] = [
   {
+    deviceId: "10.0.0.131",
     hostname: "10.0.0.131",
     bt_name: "SAMI",
     ip: "10.0.0.131",
@@ -48,6 +49,7 @@ export const MOCK_DEVICES: Device[] = [
   },
 
   {
+    deviceId: "10.0.0.1",
     hostname: "10.0.0.1",
     bt_name: "ROUTER",
     ip: "10.0.0.1",
@@ -77,6 +79,7 @@ export const MOCK_DEVICES: Device[] = [
   },
 
   {
+    deviceId: "10.0.0.47",
     hostname: "10.0.0.47",
     bt_name: null,
     ip: "10.0.0.47",

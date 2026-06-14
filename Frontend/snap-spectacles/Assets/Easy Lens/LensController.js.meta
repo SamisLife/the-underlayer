@@ -1,0 +1,44 @@
+- !<AssetImportMetadata/10a771c6-acd0-4584-9ff7-bccde893b7a2>
+  ImportedAssetIds:
+    JavaScriptAsset: !<reference> bc32bac2-ca4d-4d7e-a48a-8c85a76d764a
+  ImporterName: JavaScriptAssetImporter
+  PrimaryAsset: !<reference> bc32bac2-ca4d-4d7e-a48a-8c85a76d764a
+  PackageType: NotAPackage
+  LegacyPackagePolicy: ~
+  ExtraData:
+    USE_EASY_LENS: ""
+  AssetDataMap:
+    JavaScriptAsset: !<own> 58cc17ce-e648-49f8-8243-ff3c293d1efe
+  DependentFiles:
+    []
+  ImporterSettings: !<AssetImporterSettings>
+    {}
+  CompressionSettings: !<own> 00000000-0000-0000-0000-000000000000
+- !<ScriptAssetData/58cc17ce-e648-49f8-8243-ff3c293d1efe>
+  SvgIcon: ""
+  SetupScript:
+    code: ""
+  Description: ""
+  VersionMajor: 0
+  VersionMinor: 0
+  VersionPatch: 0
+  ComponentUid: 66b2b164-c0a2-43ee-8845-5335120a0fa3
+  ExportUid: 00000000-0000-0000-0000-000000000000
+  PackagePolicy: CanBeUnpacked
+  ScriptInputsHidden:
+    holo_grade: false
+    holo_sparkles: false
+  ScriptTypesHidden:
+    {}
+  ReadMe: !<reference> 00000000-0000-0000-0000-000000000000
+  DeclarationFile: !<reference> 00000000-0000-0000-0000-000000000000
+  Tags:
+    []
+  Attachments:
+    []
+  DefaultScriptInputs:
+    - holo_sparkles: !<reference.ScriptComponent> 00000000-0000-0000-0000-000000000000
+      holo_grade: !<reference.ScriptComponent> 00000000-0000-0000-0000-000000000000
+  ScriptTypes:
+    -
+      {}

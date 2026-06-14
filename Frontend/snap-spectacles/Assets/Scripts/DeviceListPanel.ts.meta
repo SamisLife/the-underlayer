@@ -27,16 +27,29 @@
   PackagePolicy: CanBeUnpacked
   ScriptInputsHidden:
     cameraRoot: false
+    centerUIOffset: false
+    centerUIRot: false
+    centerUIScale: false
     hudFont: false
     indicatorMaterial: false
     indicatorPrefab: false
     indicatorScale: false
     laptopPrefab: false
+    leftUIOffset: false
+    leftUIRot: false
+    leftUIScale: false
     modelOffsetY: false
     modelOffsetZ: false
     modelScale: false
     phonePrefab: false
+    rightUIOffset: false
+    rightUIRot: false
+    rightUIScale: false
     routerPrefab: false
+    shellTerminalOffset: false
+    shellTerminalPrefab: false
+    shellTerminalScale: false
+    tripleMonitorPrefab: false
     websocketUrl: false
   ScriptTypesHidden:
     {}
@@ -49,16 +62,29 @@
   DefaultScriptInputs:
     - cameraRoot: !<reference.SceneObject> 00000000-0000-0000-0000-000000000000
       websocketUrl: "wss://booth-alone-tool-syndrome.trycloudflare.com/ws/devices"
-      hudFont: !<reference.Font> 00000000-0000-0000-0000-000000000000
-      phonePrefab: !<reference.ObjectPrefab> 00000000-0000-0000-0000-000000000000
-      laptopPrefab: !<reference.ObjectPrefab> 00000000-0000-0000-0000-000000000000
-      routerPrefab: !<reference.ObjectPrefab> 00000000-0000-0000-0000-000000000000
-      indicatorPrefab: !<reference.ObjectPrefab> 00000000-0000-0000-0000-000000000000
+      hudFont: !<reference.Font> 2e336453-b3ed-44cf-b35c-444168824e5b
+      phonePrefab: !<reference.ObjectPrefab> 0a2cbe10-e1ba-42ee-b799-a34e347f645a
+      laptopPrefab: !<reference.ObjectPrefab> 255e78a9-8cd1-49e2-861a-6f49a9bb5c62
+      routerPrefab: !<reference.ObjectPrefab> 0fb16f14-9115-49a0-a744-7ec0be0a1211
+      indicatorPrefab: !<reference.ObjectPrefab> e15e3147-ce75-4309-a57e-1a0c21ea8c32
+      tripleMonitorPrefab: !<reference.ObjectPrefab> f9e7f857-67ab-4b41-892a-1d93fc31853a
+      centerUIScale: 0.200000
+      centerUIOffset: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
+      centerUIRot: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
+      leftUIScale: 0.200000
+      leftUIOffset: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
+      leftUIRot: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
+      rightUIScale: 0.200000
+      rightUIOffset: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
+      rightUIRot: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
       indicatorScale: !<float> 1.000000
       indicatorMaterial: !<reference.Material> 00000000-0000-0000-0000-000000000000
       modelScale: 0.200000
       modelOffsetY: 1.500000
       modelOffsetZ: !<float> 4.000000
+      shellTerminalPrefab: !<reference.ObjectPrefab> 4e1c6b0c-726d-40aa-a322-9070fa1ba1d5
+      shellTerminalScale: 0.020000
+      shellTerminalOffset: !<Vec3> {x: -15.000000, y: -8.000000, z: 0.000000}
   ScriptTypes:
     -
       {}
@@ -70,8 +96,21 @@
     - '// @input Asset.ObjectPrefab laptopPrefab {"hint":"Prefab for a Laptop device (with hacker material)"}'
     - '// @input Asset.ObjectPrefab routerPrefab {"hint":"Prefab for a Router device (with hacker material)"}'
     - '// @input Asset.ObjectPrefab indicatorPrefab {"hint":"Prefab for the device indicator (e.g. 3D discord server mesh)."}'
+    - '// @input Asset.ObjectPrefab tripleMonitorPrefab {"hint":"Prefab for the Triple Monitor 3D UI."}'
+    - '// @input float centerUIScale = 0.2 {"hint":"Scale multiplier for Center Monitor UI (default 0.2)"}'
+    - '// @input vec3 centerUIOffset = {0,0,0} {"hint":"Pos Offset for Center Monitor UI"}'
+    - '// @input vec3 centerUIRot = {0,0,0} {"hint":"Rot Offset for Center Monitor UI (Degrees)"}'
+    - '// @input float leftUIScale = 0.2 {"hint":"Scale multiplier for Left Monitor UI (default 0.2)"}'
+    - '// @input vec3 leftUIOffset = {0,0,0} {"hint":"Pos Offset for Left Monitor UI"}'
+    - '// @input vec3 leftUIRot = {0,0,0} {"hint":"Rot Offset for Left Monitor UI (Degrees)"}'
+    - '// @input float rightUIScale = 0.2 {"hint":"Scale multiplier for Right Monitor UI (default 0.2)"}'
+    - '// @input vec3 rightUIOffset = {0,0,0} {"hint":"Pos Offset for Right Monitor UI"}'
+    - '// @input vec3 rightUIRot = {0,0,0} {"hint":"Rot Offset for Right Monitor UI (Degrees)"}'
     - '// @input float indicatorScale = 1 {"hint":"Scale multiplier for the indicator prefab"}'
     - '// @input Asset.Material indicatorMaterial {"hint":"Optional material (like Hologram.mat) to apply to the indicator for a glowing effect."}'
     - '// @input float modelScale = 0.2 {"hint":"Scale multiplier to size the 3D models down to fit the cell"}'
     - '// @input float modelOffsetY = 1.5 {"hint":"Y-axis offset to center models vertically in their cell"}'
     - '// @input float modelOffsetZ = 4 {"hint":"Z-axis offset to push models forward out of the screen"}'
+    - // @input Asset.ObjectPrefab shellTerminalPrefab
+    - '// @input float shellTerminalScale = 0.02 {"hint":"Scale multiplier for the shell terminal (default 0.02)"}'
+    - '// @input vec3 shellTerminalOffset = {-15,-8,0} {"hint":"Local position offset for the shell terminal"}'

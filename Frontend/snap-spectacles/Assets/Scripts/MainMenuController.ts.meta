@@ -28,6 +28,8 @@
   ScriptInputsHidden:
     cameraRoot: false
     deviceListPanel: false
+    esp32Prefab: false
+    worldScanner: false
   ScriptTypesHidden:
     {}
   ReadMe: !<reference> 00000000-0000-0000-0000-000000000000
@@ -39,9 +41,13 @@
   DefaultScriptInputs:
     - cameraRoot: !<reference.SceneObject> 00000000-0000-0000-0000-000000000000
       deviceListPanel: !<reference.ScriptComponent> 00000000-0000-0000-0000-000000000000
+      worldScanner: !<reference.ScriptComponent> 00000000-0000-0000-0000-000000000000
+      esp32Prefab: !<reference.ObjectPrefab> 00000000-0000-0000-0000-000000000000
   ScriptTypes:
     -
       {}
   InputLines:
     - '// @input SceneObject cameraRoot {"hint":"The main camera so the menu can follow it"}'
     - '// @input Component.ScriptComponent deviceListPanel {"hint":"Reference to the DeviceListPanel component in the scene"}'
+    - '// @input Component.ScriptComponent worldScanner {"hint":"Optional: Reference to the WorldScannerEffect component"}'
+    - '// @input Asset.ObjectPrefab esp32Prefab {"hint":"ESP32 Hologram Prefab"}'

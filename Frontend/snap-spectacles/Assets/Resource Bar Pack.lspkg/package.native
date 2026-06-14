@@ -1,0 +1,37 @@
+- !<NativePackageDescriptor/40745998-f15b-45dc-9bc5-a7deb2ed06d7>
+  PackagePath: ""
+  StudioVersion:
+    major: 5
+    minor: 15
+    patch: 4
+    build: 26022322
+    type: Unset
+    buildFlavor: ""
+    timestamp: 0
+    commit: ""
+  Description: "Resource Bar Pack The Resource Bar Pack is a multipurpose resource designed to simplify the creation of dynamic resource bars for your projects. Whatever you want to create - life bars, mana bars, power indicators or progress indicators - this pack offers you an all-in-one solution. With scripts and customizable elements, you can easily implement both continuous and segmented bar types. Learn more here"
+  SvgIcon: ""
+  SetupScript:
+    code: ""
+  VersionMajor: 1
+  VersionMinor: 0
+  VersionPatch: 0
+  UpdateCheckpoint: 76
+  ExportUid: 852a7350-f500-4c20-8bcb-a157a6e651d4
+  ComponentUid: ce5be4c3-e114-4537-bb16-0d7561ec3f42
+  PackagePolicy: CanBeUnpackedTransparent
+  ReadMe: !<reference> 00000000-0000-0000-0000-000000000000
+  Tags:
+    []
+  Attachments:
+    []
+  Instantiable: !<reference> 00000000-0000-0000-0000-000000000000
+  AssetLibraryDependencyStructure: !<AssetLibraryDependencyStructure>
+    Name: ""
+    AssetId: ""
+    Hash: ""
+    Version:
+      major: 0
+      minor: 0
+      patch: 0
+      build: 0

@@ -65,7 +65,9 @@ export interface ArCardSection {
 
 // The ar_summary object sent from app.py's /api/devices/ar or WebSocket broadcast
 export interface DeviceSummary {
+  deviceId?: string
   hostname: string
+  deviceType?: string
   ip: string
   scannedAt?: string
   os: string
@@ -81,13 +83,23 @@ export interface DeviceSummary {
   mediumCount: number
   packageCount: number
   findings: Finding[]                      // grouped: one per package
+  sourceCounts?: Record<string, number>
   vulnerabilityMatches?: VulnMatch[]       // flat list (stripped of fix_version)
+  scanMetadata?: Record<string, any>
   arCard?: ArCard
+  problems?: Array<{
+    priority: string
+    description: string
+    fixCommand: string
+    fixLabel: string
+  }>
 }
 
 // Top-level device object from /api/devices or WebSocket
 export interface Device {
+  deviceId: string
   hostname: string
+  deviceType?: string
   bt_name: string | null
   ip?: string
   ar_summary: DeviceSummary

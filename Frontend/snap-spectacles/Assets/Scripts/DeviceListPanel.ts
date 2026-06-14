@@ -90,10 +90,11 @@ function numberOr(value: unknown, fallback: number): number {
   return typeof value === "number" && isFinite(value) ? value : fallback
 }
 
-function normalizeDevice(input: Device | Record<string, any>): Device {
+export function normalizeDevice(input: Device | Record<string, any>): Device {
   const source = input as Record<string, any>
   const summary = (source.ar_summary || source.arSummary || source) as Record<string, any>
-  const hostname = String(source.hostname || summary.hostname || summary.deviceId || "UNKNOWN")
+  const deviceId = String(source.deviceId || summary.deviceId || source.hostname || "UNKNOWN")
+  const hostname = String(source.hostname || summary.hostname || deviceId)
   
   const rawFindings = Array.isArray(summary.findings) ? summary.findings : []
   const vulnerabilityMatches = Array.isArray(summary.vulnerabilityMatches) ? summary.vulnerabilityMatches : []
@@ -110,12 +111,15 @@ function normalizeDevice(input: Device | Record<string, any>): Device {
   const threatLevel = normalizeThreatLevel(summary.threatLevel || summary.severity)
 
   return {
+    deviceId,
     hostname,
+    deviceType: source.deviceType || summary.deviceType,
     bt_name: source.bt_name || summary.bt_name || null,
     ip: String(source.ip || summary.ip || hostname),
     lastSeen: source.lastSeen || source.updatedAt,
     ar_summary: {
       hostname,
+      deviceType: source.deviceType || summary.deviceType,
       ip: String(summary.ip || source.ip || hostname),
       scannedAt: summary.scannedAt,
       os: String(summary.os || "Unknown"),
@@ -135,8 +139,11 @@ function normalizeDevice(input: Device | Record<string, any>): Device {
       mediumCount: numberOr(summary.mediumCount, 0),
       packageCount: packageNames.size,
       findings: rawFindings,
+      sourceCounts: summary.sourceCounts || {},
       vulnerabilityMatches,
-      arCard: summary.arCard
+      scanMetadata: summary.scanMetadata || {},
+      arCard: summary.arCard,
+      problems: summary.problems || []
     }
   }
 }
@@ -184,7 +191,8 @@ export function makeText(
   width: number,
   height: number,
   horizontalAlignment: HorizontalAlignment = HorizontalAlignment.Center,
-  renderOrder: number = 30
+  renderOrder: number = 30,
+  wrap: boolean = false
 ): Text {
   const object = makeObject(parent, layer, name, localPosition)
   const text = object.createComponent("Component.Text") as Text
@@ -199,7 +207,7 @@ export function makeText(
   text.textFill.color = color
   text.horizontalAlignment = horizontalAlignment
   text.verticalAlignment = VerticalAlignment.Center
-  text.horizontalOverflow = HorizontalOverflow.Truncate
+  text.horizontalOverflow = wrap ? HorizontalOverflow.Wrap : HorizontalOverflow.Truncate
   text.verticalOverflow = VerticalOverflow.Truncate
   text.stretchMode = StretchMode.FitHeight
   if (activeHudFont) text.font = activeHudFont
@@ -506,6 +514,41 @@ export class DeviceListPanel extends BaseScriptComponent {
   indicatorPrefab: ObjectPrefab
 
   @input
+  @allowUndefined
+  @hint("Prefab for the Triple Monitor 3D UI.")
+  tripleMonitorPrefab: ObjectPrefab
+
+  @input
+  @hint("Scale multiplier for Center Monitor UI (default 0.2)")
+  centerUIScale: number = 0.2
+  @input
+  @hint("Pos Offset for Center Monitor UI")
+  centerUIOffset: vec3 = new vec3(0, 0, 0)
+  @input
+  @hint("Rot Offset for Center Monitor UI (Degrees)")
+  centerUIRot: vec3 = new vec3(0, 0, 0)
+
+  @input
+  @hint("Scale multiplier for Left Monitor UI (default 0.2)")
+  leftUIScale: number = 0.2
+  @input
+  @hint("Pos Offset for Left Monitor UI")
+  leftUIOffset: vec3 = new vec3(0, 0, 0)
+  @input
+  @hint("Rot Offset for Left Monitor UI (Degrees)")
+  leftUIRot: vec3 = new vec3(0, 0, 0)
+
+  @input
+  @hint("Scale multiplier for Right Monitor UI (default 0.2)")
+  rightUIScale: number = 0.2
+  @input
+  @hint("Pos Offset for Right Monitor UI")
+  rightUIOffset: vec3 = new vec3(0, 0, 0)
+  @input
+  @hint("Rot Offset for Right Monitor UI (Degrees)")
+  rightUIRot: vec3 = new vec3(0, 0, 0)
+
+  @input
   @hint("Scale multiplier for the indicator prefab")
   indicatorScale: number = 1.0
 
@@ -525,6 +568,18 @@ export class DeviceListPanel extends BaseScriptComponent {
   @input
   @hint("Z-axis offset to push models forward out of the screen")
   modelOffsetZ: number = 4.0
+
+  @input
+  @allowUndefined
+  shellTerminalPrefab?: ObjectPrefab
+
+  @input
+  @hint("Scale multiplier for the shell terminal (default 0.02)")
+  shellTerminalScale: number = 0.02
+
+  @input
+  @hint("Local position offset for the shell terminal")
+  shellTerminalOffset: vec3 = new vec3(-15.0, -8.0, 0.0)
 
   public onDeviceReadyToPin: ((device: Device) => void) | null = null
 
@@ -567,10 +622,83 @@ export class DeviceListPanel extends BaseScriptComponent {
       if (eventName === "device_updated" && payload.device) {
         const updatedDevice = normalizeDevice(payload.device)
         const updatedDevices = this.devices.slice()
-        const existingIndex = updatedDevices.findIndex((d) => d.hostname === updatedDevice.hostname)
+        const existingIndex = updatedDevices.findIndex((d) => d.deviceId === updatedDevice.deviceId)
         if (existingIndex >= 0) updatedDevices[existingIndex] = updatedDevice
         else updatedDevices.push(updatedDevice)
         this.loadDevices(updatedDevices)
+        
+        // Find the matching panel by deviceId, hostname, or IP
+        let targetDeviceId: string | null = null
+        if (this.activeDetailPanels.has(updatedDevice.deviceId)) {
+          targetDeviceId = updatedDevice.deviceId
+        } else {
+          for (const key of this.activeDetailPanels.keys()) {
+            if (key === updatedDevice.hostname || key === updatedDevice.ip || key === updatedDevice.bt_name) {
+              targetDeviceId = key
+              break
+            }
+          }
+        }
+
+        // Push the update to the active AR detail panel if it's placed!
+        if (targetDeviceId && this.activeDetailPanels.has(targetDeviceId)) {
+          const oldPanel = this.activeDetailPanels.get(targetDeviceId)
+          if (oldPanel) {
+            try {
+              let currentPos = vec3.zero()
+              if (typeof (oldPanel as any).getWorldPosition === "function") {
+                const pos = (oldPanel as any).getWorldPosition()
+                currentPos = new vec3(pos.x, pos.y, pos.z)
+              } else if ((oldPanel as any).panelRoot) {
+                const pos = (oldPanel as any).panelRoot.getTransform().getWorldPosition()
+                currentPos = new vec3(pos.x, pos.y, pos.z)
+              }
+              
+              let wasExpanded = false
+              if (typeof (oldPanel as any).isExpanded === "function") {
+                wasExpanded = (oldPanel as any).isExpanded()
+              }
+              
+              oldPanel.destroy()
+              this.activeDetailPanels.delete(targetDeviceId)
+            
+            const apiUrlBase = this.websocketUrl.replace("ws://", "http://").replace("wss://", "https://").replace("/ws/devices", "")
+            const newPanel = new DeviceDetailPanel(
+              this.getSceneObject(),
+              this.layer,
+              this.cameraRoot,
+              updatedDevice,
+              currentPos,
+              this.indicatorPrefab,
+              this.indicatorScale,
+              this.indicatorMaterial,
+              this.tripleMonitorPrefab,
+              this.centerUIScale,
+              this.centerUIOffset,
+              this.centerUIRot,
+              this.leftUIScale,
+              this.leftUIOffset,
+              this.leftUIRot,
+              this.rightUIScale,
+              this.rightUIOffset,
+              this.rightUIRot,
+              apiUrlBase,
+              this.shellTerminalPrefab,
+              this.shellTerminalScale,
+              this.shellTerminalOffset
+            )
+            
+            // Keep it expanded if the old one was expanded
+            if (wasExpanded && typeof (newPanel as any).setExpanded === "function") {
+              (newPanel as any).setExpanded(true)
+            }
+            
+            this.activeDetailPanels.set(targetDeviceId, newPanel)
+            } catch (err) {
+              log.e(`Failed to hot-swap AR panel: ${err}`)
+            }
+          }
+        }
       }
     } catch (error) {
       log.e(`WebSocket parse error: ${error}`)
@@ -642,6 +770,34 @@ export class DeviceListPanel extends BaseScriptComponent {
       })
     } catch (error) {
       log.e(`HTTP Polling catch block error: ${error}`)
+    }
+  }
+
+  public triggerBackendScan(onComplete: (success: boolean) => void): void {
+    const apiUrl = this.websocketUrl.replace("ws://", "http://").replace("wss://", "https://").replace("/ws/devices", "/api/scan/trigger")
+    log.d(`Sending scan trigger request to ${apiUrl}`)
+
+    try {
+      const request = RemoteServiceHttpRequest.create()
+      request.url = apiUrl
+      request.method = RemoteServiceHttpRequest.HttpRequestMethod.Post
+
+      this.internetModule.performHttpRequest(request, (response: RemoteServiceHttpResponse) => {
+        if (response.statusCode === 200) {
+          log.d(`Scan complete! Backend response: ${response.body}`)
+          const delayed = this.createEvent("DelayedCallbackEvent") as DelayedCallbackEvent
+          delayed.bind(() => {
+            onComplete(true)
+          })
+          delayed.reset(3.0)
+        } else {
+          log.e(`Scan trigger failed with status ${response.statusCode}. Body: ${response.body}`)
+          onComplete(false)
+        }
+      })
+    } catch (error) {
+      log.e(`HTTP trigger catch block error: ${error}`)
+      onComplete(false)
     }
   }
 
@@ -788,6 +944,11 @@ export class DeviceListPanel extends BaseScriptComponent {
       const type = guessDeviceType(device, index)
       const prefab = type === "phone" ? this.phonePrefab : (type === "router" ? this.routerPrefab : this.laptopPrefab)
 
+      // The phone model is a bit too large compared to the others, so we scale it down specifically
+      const finalScale = type === "phone" ? this.modelScale * 0.4 : this.modelScale
+      // Shift the phone down a bit so it sits perfectly in the cell
+      const finalOffsetY = type === "phone" ? this.modelOffsetY - 4.0 : this.modelOffsetY
+
       this.cells.push(
         new Device3DView(
           this.listRoot,
@@ -795,8 +956,8 @@ export class DeviceListPanel extends BaseScriptComponent {
           device,
           index,
           prefab,
-          this.modelScale,
-          this.modelOffsetY,
+          finalScale,
+          finalOffsetY,
           this.modelOffsetZ,
           (selectedDevice) => this.beginPinMode(selectedDevice)
         )
@@ -892,7 +1053,7 @@ export class DeviceListPanel extends BaseScriptComponent {
         // Destroy the placer (ghost model)
         placer.destroy()
 
-        const deviceId = device.hostname || device.bt_name || "unknown"
+        const deviceId = device.deviceId
 
         // Destroy the old panel if the user is relocating the same device
         if (this.activeDetailPanels.has(deviceId)) {
@@ -901,7 +1062,7 @@ export class DeviceListPanel extends BaseScriptComponent {
           this.activeDetailPanels.delete(deviceId)
         }
 
-        // Spawn the mockup detail panel
+        const apiUrlBase = this.websocketUrl.replace("ws://", "http://").replace("wss://", "https://").replace("/ws/devices", "")
         const detailPanel = new DeviceDetailPanel(
           this.sceneObject,
           this.layer,
@@ -910,7 +1071,21 @@ export class DeviceListPanel extends BaseScriptComponent {
           finalPos,
           this.indicatorPrefab,
           this.indicatorScale,
-          this.indicatorMaterial
+          this.indicatorMaterial,
+          this.tripleMonitorPrefab,
+          this.centerUIScale,
+          this.centerUIOffset,
+          this.centerUIRot,
+          this.leftUIScale,
+          this.leftUIOffset,
+          this.leftUIRot,
+          this.rightUIScale,
+          this.rightUIOffset,
+          this.rightUIRot,
+          apiUrlBase,
+          this.shellTerminalPrefab,
+          this.shellTerminalScale,
+          this.shellTerminalOffset
         )
 
         this.activeDetailPanels.set(deviceId, detailPanel)

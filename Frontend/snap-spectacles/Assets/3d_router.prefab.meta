@@ -1,0 +1,167 @@
+- !<AssetImportMetadata/08800c39-8c34-41b3-87ec-7eb32e39a7e3>
+  ImportedAssetIds:
+    ObjectPrefab: !<reference> 0fb16f14-9115-49a0-a744-7ec0be0a1211
+  ImporterName: ObjectPrefabImporter
+  PrimaryAsset: !<reference> 0fb16f14-9115-49a0-a744-7ec0be0a1211
+  PackageType: NotAPackage
+  LegacyPackagePolicy: ~
+  ExtraData:
+    {}
+  AssetDataMap:
+    ObjectPrefab: !<own> c367f812-9ac4-417e-bd09-bd2d7ab1a48c
+  DependentFiles:
+    []
+  ImporterSettings: !<AssetImporterSettings>
+    {}
+  CompressionSettings: !<own> 00000000-0000-0000-0000-000000000000
+- !<SceneObject/1b942402-f6bb-435f-4761-faeb7f1ffe1e>
+  PrefabRemaps:
+    []
+  Name: router
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    - !<own> 6071c0e9-1e80-45c5-7dc6-bfb0764fb68d
+    - !<own> d9cffd61-5e97-436a-50a9-57526cf0eba0
+    - !<own> a04837f9-bdd6-4175-7ce5-99e3f9529a18
+  Components:
+    []
+- !<SceneObject/6071c0e9-1e80-45c5-7dc6-bfb0764fb68d>
+  PrefabRemaps:
+    []
+  Name: Light
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 407.624542, y: 590.386230, z: -100.545395}
+    Rotation: {x: -132.466431, y: 72.779221, z: -169.256332}
+    Scale: {x: 100.000008, y: 100.000000, z: 100.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> cb6d9777-60e3-43c0-6643-7699e6b11dc3
+- !<SceneObject/a04837f9-bdd6-4175-7ce5-99e3f9529a18>
+  PrefabRemaps:
+    []
+  Name: Router
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> fe8ea19a-3d4b-4fb8-46f7-65d6f8d4fe45
+- !<Camera/b7de6f93-56a4-4c28-7a77-c377f45ef506>
+  PrefabRemaps:
+    []
+  Name: component_1
+  Enabled: true
+  renderLayer: 1
+  MipmapLevel: 0
+  RenderOrder: 0
+  Size: 20.000000
+  Near: 10.000000
+  Far: 10000.000000
+  Fov: 79.195511
+  ClearColor: !<CameraClearColor>
+    Mode: None
+    Color: {x: 0.000000, y: 0.000000, z: 0.000000, w: 0.000000}
+    InputTexture: !<reference> 00000000-0000-0000-0000-000000000000
+  ClearDepth: !<CameraClearDepth>
+    Mode: None
+    Value: 1.000000
+    InputTexture: !<reference> 00000000-0000-0000-0000-000000000000
+  Aspect: 1.000000
+  CameraType: Perspective
+  DepthMode: Regular
+  DeviceProperty: All
+  AspectPreset: Custom
+  OitLayers: NoOit
+  RenderTarget: !<reference> 00000000-0000-0000-0000-000000000000
+  DepthStencilRenderTarget: !<reference> 00000000-0000-0000-0000-000000000000
+  MaskTexture: !<reference> 00000000-0000-0000-0000-000000000000
+  RayTracing: !<reference> 00000000-0000-0000-0000-000000000000
+  DevicePropertiesSource: !<reference> 00000000-0000-0000-0000-000000000000
+- !<ObjectPrefabAssetData/c367f812-9ac4-417e-bd09-bd2d7ab1a48c>
+  Prototype: !<ObjectOwner/bf63b0b2-ce1e-4567-87e3-89304a193855>
+    PackagePath: ""
+    objects:
+      - !<own> 1b942402-f6bb-435f-4761-faeb7f1ffe1e
+- !<LightSource/cb6d9777-60e3-43c0-6643-7699e6b11dc3>
+  PrefabRemaps:
+    []
+  Name: component_0
+  Enabled: true
+  renderLayer: 1
+  LightType: Point
+  Intensity: 1000.000000
+  CastShadows: false
+  ShadowDensity: 1.000000
+  ShadowBlurRadius: 0.000000
+  ShadowTextureSize: 512
+  AutoLightSourcePosition: false
+  AutoShadowFrustumSize: false
+  AutoShadowFrustumSizeExtend: 2.000000
+  ShadowFrustumSize: 30.000000
+  ShadowFrustumNearClipPlane: 1.000000
+  ShadowFrustumFarClipPlane: 1000.000000
+  UseEnvMapFromCamera: false
+  EnvMapFromCameraMode: Auto
+  EstimationSharpness: 1.000000
+  EnvMapExposure: 1.000000
+  EnvMapRotation: 0.000000
+  DiffuseEnvTexture: !<reference> 00000000-0000-0000-0000-000000000000
+  SpecularEnvTexture: !<reference> 00000000-0000-0000-0000-000000000000
+  Color: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowColor: {x: 0.000000, y: 0.000000, z: 0.000000, w: 0.000000}
+  DynamicEnvInputTexture: !<reference> 00000000-0000-0000-0000-000000000000
+  InnerConeAngle: 0.000000
+  OuterConeAngle: 1.000000
+  DecayType: None
+  DecayLimit: false
+  DecayRange: 1.000000
+- !<SceneObject/d9cffd61-5e97-436a-50a9-57526cf0eba0>
+  PrefabRemaps:
+    []
+  Name: Camera
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 735.889160, y: 495.830933, z: 692.579102}
+    Rotation: {x: -157.231186, y: 37.891682, z: -145.651505}
+    Scale: {x: 100.000000, y: 100.000015, z: 99.999992}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> b7de6f93-56a4-4c28-7a77-c377f45ef506
+- !<RenderMeshVisual/fe8ea19a-3d4b-4fb8-46f7-65d6f8d4fe45>
+  PrefabRemaps:
+    []
+  Name: component_2
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 8ac9b1f8-0e05-4aea-9311-4f4cf267e017
+  Mesh: !<reference> 1ea24273-71b4-4fbf-bae3-6d475b9e0a5b
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
