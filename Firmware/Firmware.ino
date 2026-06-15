@@ -13,7 +13,7 @@
 //
 //  Libraries:
 //    Adafruit ST7789 · Adafruit GFX · Modulino / Arduino_Modulino
-//    ESP32 BLE Arduino (built-in with esp32 board package)
+//    NimBLE-Arduino (install via Library Manager — replaces ESP32 BLE Arduino)
 //
 //  Partition scheme: Tools → Partition Scheme z Huge APP (3MB No OTA)
 // =====================================================================
@@ -26,16 +26,16 @@
 #include <Modulino.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
-#include <BLEDevice.h>
-#include <BLEScan.h>
-#include <BLEAdvertisedDevice.h>
+#include <NimBLEDevice.h>
+#include <NimBLEScan.h>
+#include <NimBLEAdvertisedDevice.h>
 
 // ── WiFi credentials ─────────────────────────────────────────────────
 const char* WIFI_SSID = "WIFI_SSID";
-const char* WIFI_PASS = "WIFI_PASS";
+const char* WIFI_PASS = "WIFI_PASSWORD";
 
 // ── Backend endpoint (ssh_engine.py) ─────────────────────────────────
-const char* BACKEND_HOST = "10.0.0.228";   // ← set to your laptop's LAN IP
+const char* BACKEND_HOST = "IP_ADDRESS";   // ← set to your laptop's LAN IP
 const int   BACKEND_PORT = 8001;
 
 // ── Timing constants ──────────────────────────────────────────────────
@@ -57,6 +57,16 @@ const unsigned long POST_RESULT_DELAY  =  2500;
 Adafruit_ST7789 tft(TFT_CS, TFT_DC, TFT_RST);
 ModulinoKnob    knob;
 
+// ── Range selector ────────────────────────────────────────────────────
+const int rangeValues[] = {5, 10, 25, 50, 100};
+const int RANGE_COUNT   = sizeof(rangeValues) / sizeof(rangeValues[0]);
+int rangeIndex = 2;
+volatile int currentMinRssi = -110;
+
+// ── Backend POST state (hoisted; full block below with other post globals) ──
+bool postStarted = false;
+bool postDone    = false;
+
 // ── BLE scanner ───────────────────────────────────────────────────────
 const int SCAN_SECS = 3;
 const int MAX_FOUND = 40;
@@ -73,21 +83,38 @@ FoundDevice      foundDevices[MAX_FOUND];
 volatile int     foundCount  = 0;
 volatile bool    scanRunning = false;
 volatile bool    scanDone    = false;
-BLEScan*         pBLEScan    = nullptr;
+NimBLEScan*      pBLEScan    = nullptr;
 
-class ScanCallback : public BLEAdvertisedDeviceCallbacks {
-  void onResult(BLEAdvertisedDevice dev) override {
+// NimBLE 2.x: NimBLEScanCallbacks replaces NimBLEAdvertisedDeviceCallbacks.
+// onScanEnd() absorbs the old standalone scan-complete function pointer.
+class ScanCallback : public NimBLEScanCallbacks {
+  void onResult(const NimBLEAdvertisedDevice* dev) override {
+    if (dev->getRSSI() < currentMinRssi) return;
     if (foundCount >= MAX_FOUND) return;
-    String mac = dev.getAddress().toString().c_str();
-    mac.toUpperCase();
+
+    // Build uppercased MAC on the stack — no heap allocation for the dedup
+    // check, which fires for every advertisement (hundreds in crowded spaces).
+    const char* rawMac = dev->getAddress().toString().c_str();
+    char macUpper[18];
+    int j = 0;
+    for (int i = 0; rawMac[i] && j < 17; i++)
+      macUpper[j++] = toupper((unsigned char)rawMac[i]);
+    macUpper[j] = '\0';
+
     for (int i = 0; i < foundCount; i++) {
-      if (mac.equalsIgnoreCase(foundDevices[i].mac)) return;
+      if (strcasecmp(foundDevices[i].mac, macUpper) == 0) return;
     }
+
     FoundDevice& fd = foundDevices[foundCount];
-    String nm = dev.getName().c_str();
-    if (nm.length() == 0 && dev.haveManufacturerData()) {
+    strncpy(fd.mac, macUpper, sizeof(fd.mac));
+    fd.mac[sizeof(fd.mac) - 1] = '\0';
+
+    // Name / manufacturer lookup — String is acceptable here because we only
+    // reach this branch when we are actually storing the device (< MAX_FOUND).
+    String nm = dev->getName().c_str();
+    if (nm.length() == 0 && dev->haveManufacturerData()) {
       // Identify by manufacturer company ID when name is not advertised
-      String mfr = dev.getManufacturerData();
+      std::string mfr = dev->getManufacturerData();
       if (mfr.length() >= 2) {
         uint16_t company = (uint8_t)mfr[0] | ((uint16_t)(uint8_t)mfr[1] << 8);
         if      (company == 0x004C) nm = "(Apple)";
@@ -97,27 +124,51 @@ class ScanCallback : public BLEAdvertisedDeviceCallbacks {
     }
     if (nm.length() == 0) nm = "(unknown)";
     nm.toCharArray(fd.name, sizeof(fd.name));
-    mac.toCharArray(fd.mac, sizeof(fd.mac));
-    fd.rssi       = dev.getRSSI();
+
+    fd.rssi       = dev->getRSSI();
     fd.recognized = false;
     fd.sshCapable = false;
     foundCount++;
+  }
+
+  void onScanEnd(const NimBLEScanResults& /*results*/, int /*reason*/) override {
+    scanRunning = false;
+    scanDone    = true;
   }
 };
 
 ScanCallback scanCB;
 
-void scanCompleteCallback(BLEScanResults /*r*/) {
-  scanRunning = false;
-  scanDone    = true;
+void initBLEScan() {
+  NimBLEDevice::init("SPECTER");
+  pBLEScan = NimBLEDevice::getScan();
+  // wantDuplicates=true: every advertisement fires our callback; NimBLE does no
+  // internal dedup (which would require heap), so our onResult() dedup runs.
+  pBLEScan->setScanCallbacks(&scanCB, /*wantDuplicates=*/true);
+  // CRITICAL: store zero results internally — callback only, no internal map growth.
+  pBLEScan->setMaxResults(0);
+  pBLEScan->setActiveScan(true);
+  pBLEScan->setInterval(100);
+  pBLEScan->setWindow(99);
 }
 
 void startBLEScan() {
-  foundCount  = 0;
-  scanDone    = false;
-  scanRunning = true;
+  if (rangeValues[rangeIndex] == 5) currentMinRssi = -60;
+  else if (rangeValues[rangeIndex] == 10) currentMinRssi = -70;
+  else if (rangeValues[rangeIndex] == 25) currentMinRssi = -80;
+  else if (rangeValues[rangeIndex] == 50) currentMinRssi = -90;
+  else currentMinRssi = -110;
+
+  // Re-init BLE if it was deinited after a previous scan to free heap.
+  if (pBLEScan == nullptr) initBLEScan();
+
+  foundCount   = 0;
+  scanDone     = false;
+  scanRunning  = true;
+  postStarted  = false;   // reset POST state for each new scan cycle
+  postDone     = false;
   pBLEScan->clearResults();
-  pBLEScan->start(SCAN_SECS, scanCompleteCallback, false);
+  pBLEScan->start(SCAN_SECS, /*isContinue=*/false);
 }
 
 // ── WiFi state ────────────────────────────────────────────────────────
@@ -142,8 +193,8 @@ WebServer server(80);
 void handleApiScan(); // Forward declaration
 
 // ── Backend POST ──────────────────────────────────────────────────────
-bool postStarted    = false;
-bool postDone       = false;
+// postStarted / postDone declared above (before BLE scanner) to satisfy
+// the forward reference in startBLEScan().
 bool postSuccess    = false;
 int  postRecognized = 0;
 int  postSshQueued  = 0;
@@ -151,6 +202,7 @@ unsigned long postResultMs = 0;
 
 String escapeName(const char* s) {
   String out;
+  out.reserve(strlen(s) + 5);
   for (int i = 0; s[i]; i++) {
     char c = s[i];
     if      (c == '"')  out += "\\\"";
@@ -161,7 +213,9 @@ String escapeName(const char* s) {
 }
 
 String buildScanPayload() {
-  String j = "{\"scanner_id\":\"underlayer-01\",\"devices\":[";
+  String j;
+  j.reserve(4096);
+  j = "{\"scanner_id\":\"underlayer-01\",\"devices\":[";
   for (int i = 0; i < (int)foundCount; i++) {
     if (i > 0) j += ",";
     j += "{\"name\":\"" + escapeName(foundDevices[i].name) + "\",";
@@ -237,6 +291,7 @@ enum ScreenState {
   SCREEN_RANGE,
   SCREEN_SCAN_READY,
   SCREEN_SCANNING,
+  SCREEN_WIFI_SCAN,   // async WiFi scan in progress (after BLE completes)
   SCREEN_POSTING,
   SCREEN_RESULTS
 };
@@ -258,13 +313,8 @@ const int TARGET_COUNT    = 7;
 const int TARGET_NEXT_ROW = 7;
 bool targetSelected[TARGET_COUNT] = {true, true, true, true, true, true, true};
 
-// ── Range selector ────────────────────────────────────────────────────
-const int rangeValues[] = {5, 10, 25, 50, 100};
-const int RANGE_COUNT   = sizeof(rangeValues) / sizeof(rangeValues[0]);
-
 // ── UI state ──────────────────────────────────────────────────────────
 int  selectedRow  = 0;
-int  rangeIndex   = 2;
 int  scanAction   = 0;
 int  resultOffset = 0;
 
@@ -559,6 +609,15 @@ void drawWifiScreen() {
   drawFooter("CLICK: skip", "");
 }
 
+// ── WiFi-scan overlay (shown between BLE done and HTTP POST) ──────────
+void drawWifiScanScreen() {
+  char sub[12];
+  snprintf(sub, sizeof(sub), "%d found", (int)foundCount);
+  drawFrame("WIFI SCAN", sub);
+  printCentered("Scanning WiFi...", 110, 2, C_AMBER);
+  drawFooter("", "CLICK: skip");
+}
+
 // ── Posting screen ────────────────────────────────────────────────────
 void drawPostingScreen() {
   const char* sub = postDone ? (postSuccess ? "sent" : "error") : "sending";
@@ -763,6 +822,7 @@ void drawCurrentScreen() {
     case SCREEN_RANGE:      drawRangeScreen();     break;
     case SCREEN_SCAN_READY: drawScanReadyScreen(); break;
     case SCREEN_SCANNING:   drawScanningScreen();  break;
+    case SCREEN_WIFI_SCAN:  drawWifiScanScreen();  break;
     case SCREEN_WIFI:       drawWifiScreen();      break;
     case SCREEN_POSTING:    drawPostingScreen();   break;
     case SCREEN_RESULTS:    drawResultsScreen();   break;
@@ -783,21 +843,30 @@ void scanI2CBus() {
   if (found == 0) Serial.println("  None found.");
 }
 
-void doWiFiScan() {
-  Serial.println("Starting WiFi scan...");
-  int n = WiFi.scanNetworks(false, true); // sync scan, show hidden
+void startWiFiScan() {
+  Serial.println("Starting async WiFi scan...");
+  // Async scan: returns immediately, does not block the loop or trip the WDT.
+  WiFi.scanNetworks(/*async=*/true, /*show_hidden=*/true);
+}
+
+// Returns true when the scan has results ready; false while still running.
+bool collectWiFiScanResults() {
+  int n = WiFi.scanComplete();
+  if (n == WIFI_SCAN_RUNNING) return false;
+  if (n < 0) {
+    Serial.println("WiFi scan error or no results.");
+    return true;
+  }
   for (int i = 0; i < n; ++i) {
+    if (WiFi.RSSI(i) < currentMinRssi) continue;
     if (foundCount >= MAX_FOUND) break;
     FoundDevice& fd = foundDevices[foundCount];
     String ssid = WiFi.SSID(i);
-    String bssid = WiFi.BSSIDstr(i);
-    bssid.toUpperCase();
-    
-    // Some routers have empty SSID, handle them gracefully
+    uint8_t* bssid = WiFi.BSSID(i);
     if (ssid.length() == 0) ssid = "(hidden)";
-    
     ssid.toCharArray(fd.name, sizeof(fd.name));
-    bssid.toCharArray(fd.mac, sizeof(fd.mac));
+    snprintf(fd.mac, sizeof(fd.mac), "%02X:%02X:%02X:%02X:%02X:%02X",
+             bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
     fd.rssi = WiFi.RSSI(i);
     fd.recognized = false;
     fd.sshCapable = false;
@@ -805,6 +874,7 @@ void doWiFiScan() {
   }
   WiFi.scanDelete();
   Serial.printf("WiFi scan found %d networks. Total devices: %d\n", n, foundCount);
+  return true;
 }
 
 // ── setup ─────────────────────────────────────────────────────────────
@@ -830,13 +900,9 @@ void setup() {
   lastPosition = knob.get();
   lastPressed  = knob.isPressed();
 
-  // BLE init before WiFi
-  BLEDevice::init("SPECTER");
-  pBLEScan = BLEDevice::getScan();
-  pBLEScan->setAdvertisedDeviceCallbacks(&scanCB);
-  pBLEScan->setActiveScan(true);
-  pBLEScan->setInterval(100);
-  pBLEScan->setWindow(99);
+  // BLE init — mirrored in initBLEScan() which is called on subsequent scans
+  // after BLEDevice::deinit() frees the Bluedroid heap.
+  initBLEScan();
 
   Serial.println("UNDERLAYER ready. Connecting to WiFi...");
   
@@ -856,7 +922,7 @@ void handleApiScan() {
   drawCurrentScreen();
   startBLEScan();
 
-  // Block until scan is done, but keep updating the UI
+  // Block until BLE scan is done, keeping the UI animated.
   while (scanRunning) {
     if (millis() - lastDrawMs >= 200) {
       drawCurrentScreen();
@@ -865,7 +931,14 @@ void handleApiScan() {
     delay(10);
   }
 
-  doWiFiScan();
+  // BLE done — deinit to free Bluedroid heap before WiFi + HTTP.
+  pBLEScan->clearResults();
+  NimBLEDevice::deinit(true);
+  pBLEScan = nullptr;
+
+  // Block on async WiFi scan.
+  startWiFiScan();
+  while (!collectWiFiScanResults()) { delay(50); }
   scanDone = false; // consume flag so loop() doesn't double-trigger
 
   // Post to backend synchronously before responding
@@ -905,22 +978,39 @@ void loop() {
 
   // ── SCANNING ─────────────────────────────────────────────────────
   if (screen == SCREEN_SCANNING) {
+    // NOTE: Do NOT call pBLEScan->stop() + clearResults() here from the main
+    // task. stop() is asynchronous — the BLE FreeRTOS task on Core 0 may still
+    // be in onResult() when clearResults() runs, causing heap corruption.
+    // The onResult() guard (foundCount >= MAX_FOUND) is sufficient; let the
+    // 3-second timer expire naturally so scanCompleteCallback() fires from
+    // the BLE task itself, guaranteeing the stack is quiesced before we
+    // call clearResults().
+
     if (scanDone) {
       scanDone = false;
-      
-      doWiFiScan();
+      pBLEScan->clearResults(); // safe: BLE task has fully stopped by this point
 
-      // If we got here from an API trigger, handleApiScan() will set the screen 
-      // back to SCREEN_WIFI or wherever it needs to go, but if this was a physical 
-      // knob scan, we transition to SCREEN_POSTING to send results to the backend.
-      if (!postStarted && !postDone) {
-         postStarted = false;
-         postDone = false;
-         screen = SCREEN_POSTING;
-      }
+      // Deinit BLE to reclaim ~100 KB of Bluedroid heap before WiFi + HTTP.
+      // pBLEScan is set to nullptr so startBLEScan() will re-init next time.
+      NimBLEDevice::deinit(true);
+      pBLEScan = nullptr;
+
+      // Kick off an async WiFi scan; loop() will poll it in SCREEN_WIFI_SCAN.
+      startWiFiScan();
+      screen    = SCREEN_WIFI_SCAN;
       needsDraw = true;
     } else if (millis() - lastDrawMs >= 200) {
       needsDraw = true;            // keep animation alive
+    }
+  }
+
+  // ── WIFI SCAN (async, post-BLE) ───────────────────────────────────
+  if (screen == SCREEN_WIFI_SCAN) {
+    if (collectWiFiScanResults()) {
+      screen    = SCREEN_POSTING;
+      needsDraw = true;
+    } else if (millis() - lastDrawMs >= 300) {
+      needsDraw = true; // keep "scanning wifi..." animation alive
     }
   }
 
