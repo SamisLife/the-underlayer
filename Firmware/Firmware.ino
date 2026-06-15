@@ -32,7 +32,7 @@
 
 // ── WiFi credentials ─────────────────────────────────────────────────
 const char* WIFI_SSID = "WIFI_SSID";
-const char* WIFI_PASS = "WIFI_PASSWORD";
+const char* WIFI_PASS = "WIFI_PASS";
 
 // ── Backend endpoint (ssh_engine.py) ─────────────────────────────────
 const char* BACKEND_HOST = "IP_ADDRESS";   // ← set to your laptop's LAN IP
@@ -168,7 +168,7 @@ void startBLEScan() {
   postStarted  = false;   // reset POST state for each new scan cycle
   postDone     = false;
   pBLEScan->clearResults();
-  pBLEScan->start(SCAN_SECS, /*isContinue=*/false);
+  pBLEScan->start(SCAN_SECS * 1000, /*isContinue=*/false); // NimBLE 2.x uses ms, not s
 }
 
 // ── WiFi state ────────────────────────────────────────────────────────
