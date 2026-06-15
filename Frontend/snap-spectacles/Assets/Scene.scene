@@ -9,6 +9,7 @@
     - !<own> 8364b136-a0a6-4dde-8c97-02751d9fd7f4
     - !<own> b0e6600b-3ae5-4291-a305-eff22b2e25f1
     - !<own> e68b7fef-9bf5-4186-8802-4abba032e8b3
+    - !<own> 24bfe785-256d-44d0-9015-e66831d97036
   layers: !<Layers/267ee9a7-aff2-4f9d-9a49-f71214747d03>
     userLayers:
       - |
@@ -683,6 +684,23 @@
   BlendNormals: false
   BlendShapes:
     {}
+- !<SceneObject/24bfe785-256d-44d0-9015-e66831d97036>
+  PrefabRemaps:
+    - 24bfe785-256d-44d0-9015-e66831d97036: 17fc8654-1104-4903-4127-d155e95c0207
+    - 4fef836b-8190-4bd8-84fd-7cecbbe8e596: c15fcbc1-c370-4aac-4443-bf8961a19e0c
+    - 85bd4b25-959a-44cc-9953-b5a7c0f34b13: 2559837e-30cc-49f4-5b0e-fb87116afd78
+  Name: notebook
+  Enabled: false
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 0.160000, y: 0.160000, z: 0.160000}
+    HasSegmentScaleCompensation: false
+  Children:
+    - !<own> 85bd4b25-959a-44cc-9953-b5a7c0f34b13
+  Components:
+    []
 - !<SceneObject/25629a6e-2093-4e6e-a52c-f5f418f83a57>
   PrefabRemaps:
     []
@@ -1191,6 +1209,26 @@
     - !<own> 8fb7463e-bf6e-4bfe-af22-8a8ba3b03558
   Components:
     []
+- !<RenderMeshVisual/4fef836b-8190-4bd8-84fd-7cecbbe8e596>
+  PrefabRemaps:
+    []
+  Name: component_0
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 8ac9b1f8-0e05-4aea-9311-4f4cf267e017
+  Mesh: !<reference> 271aa549-cbb4-421a-9a86-d970af73fed6
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
 - !<SceneObject/4ffc07e9-cfa8-4e18-ad05-69bf34408be3>
   PrefabRemaps:
     []
@@ -1833,12 +1871,15 @@
     rightUIScale: true
     rightUIOffset: true
     rightUIRot: true
+    notebookScale: true
+    notebookOffset: true
+    notebookTitlePos: true
   ScriptTypesDefault:
     {}
   ScriptInputs:
     "":
       cameraRoot: !<reference.SceneObject> 00000000-0000-0065-0000-000000000064
-      websocketUrl: "wss://plans-spam-issued-tag.trycloudflare.com/ws/devices"
+      websocketUrl: "wss://ecology-assumption-looking-bet.trycloudflare.com/ws/devices"
       hudFont: !<reference.Font> 2e336453-b3ed-44cf-b35c-444168824e5b
       phonePrefab: !<reference.ObjectPrefab> 0a2cbe10-e1ba-42ee-b799-a34e347f645a
       laptopPrefab: !<reference.ObjectPrefab> 255e78a9-8cd1-49e2-861a-6f49a9bb5c62
@@ -1862,6 +1903,12 @@
       shellTerminalPrefab: !<reference.ObjectPrefab> 1165d498-ea43-44f6-ac19-b9a99ab8bf78
       shellTerminalScale: 0.030000
       shellTerminalOffset: !<Vec3> {x: -32.500000, y: -14.000000, z: 0.000000}
+      notebookPrefab: !<reference.ObjectPrefab> 2db30052-9d85-46e1-9385-a473539973c8
+      notebookScale: 0.160000
+      notebookOffset: !<Vec3> {x: -15.000000, y: -8.000000, z: 0.000000}
+      notebookTitlePos: !<Vec3> {x: -3.500000, y: 17.500000, z: 2.000000}
+      notebookTextPos: !<Vec3> {x: -4.000000, y: -25.000000, z: 2.000000}
+      notebookCloseBtnPos: !<Vec3> {x: -13.000000, y: 17.500000, z: 2.000000}
   ScriptTypes:
     "":
       {}
@@ -2046,6 +2093,21 @@
   ScriptTypes:
     "":
       {}
+- !<SceneObject/85bd4b25-959a-44cc-9953-b5a7c0f34b13>
+  PrefabRemaps:
+    []
+  Name: ""
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 4fef836b-8190-4bd8-84fd-7cecbbe8e596
 - !<SceneObject/87ecc076-3cde-41a8-bd6f-80effd7c3770>
   PrefabRemaps:
     []

@@ -48,7 +48,13 @@ export class DeviceDetailPanel {
     private apiUrlBase: string = "",
     private shellTerminalPrefab?: ObjectPrefab,
     private shellTerminalScale: number = 0.02,
-    private shellTerminalOffset: vec3 = new vec3(-15.0, -8.0, 0.0)
+    private shellTerminalOffset: vec3 = new vec3(-15.0, -8.0, 0.0),
+    private notebookPrefab?: ObjectPrefab,
+    private notebookScale: number = 0.16,
+    private notebookOffset: vec3 = new vec3(15.0, -8.0, 0.0),
+    private notebookTitlePos: vec3 = new vec3(-3.5, 17.5, 2.0),
+    private notebookTextPos: vec3 = new vec3(-4.0, -27.0, 2.0),
+    private notebookCloseBtnPos: vec3 = new vec3(-20.0, 17.5, 2.0)
   ) {
     // Create the main panel root at the chosen world position
     this.panelRoot = makeObject(parentRoot, layer, `UL_Detail_${device.hostname}`)
@@ -232,9 +238,9 @@ export class DeviceDetailPanel {
     }
     
     const displayName = this.device.bt_name || this.device.hostname || "UNKNOWN"
-    makeText(centerRoot, this.layer, "Header", `> ${displayName}_`, FS_TITLE * SC_C * TS, C_WHITE, new vec3(0, c_h/2 - (35 * SC_C), 0), (c_w - (20 * SC_C)) * TS, 30 * SC_C * TS)
+    makeText(centerRoot, this.layer, "Header", `> ${displayName}_`, (FS_TITLE * 1.75) * SC_C * TS, C_WHITE, new vec3(0, c_h/2 - (35 * SC_C), 0), (c_w - (20 * SC_C)) * TS, 60 * SC_C * TS)
     const cves = this.device.ar_summary?.cveCount || 0
-    makeText(centerRoot, this.layer, "SubHeader", `TOTAL CVE: ${cves} | THREAT: ${tLevel.toUpperCase()}`, FS_SMALL * SC_C * TS, tColor, new vec3(0, c_h/2 - (65 * SC_C), 0), (c_w - (20 * SC_C)) * TS, 20 * SC_C * TS)
+    makeText(centerRoot, this.layer, "SubHeader", `TOTAL CVE: ${cves} | THREAT: ${tLevel.toUpperCase()}`, (FS_SMALL * 1.75) * SC_C * TS, tColor, new vec3(0, c_h/2 - (65 * SC_C), 0), (c_w - (20 * SC_C)) * TS, 40 * SC_C * TS)
     
     const counts = this.device.ar_summary?.sourceCounts || {}
     let totalVulns = 0
@@ -305,8 +311,9 @@ export class DeviceDetailPanel {
         const textW = (r_s_w - (70 * SC_R)) * TS
         const startX = -r_s_w/2 + (15 * SC_R)
         const posX = startX + textW/2
-        makeText(rightRoot, this.layer, `Prob_${i}`, `[${prob.priority}] ${prob.description}`, FS_SMALL * SC_R * TS, pColor, new vec3(posX, pY, 0), textW, 16 * SC_R * TS, HorizontalAlignment.Left)
         
+        makeText(rightRoot, this.layer, `Prob_${i}`, `[${prob.priority}] ${prob.description}`, FS_SMALL * SC_R * TS, pColor, new vec3(posX, pY, 0), textW, 16 * SC_R * TS, HorizontalAlignment.Left)
+
         // FIX button
         const fixBtnRoot = makeObject(rightRoot, this.layer, `FixBtn_${i}`, new vec3((r_s_w/2) - (28 * SC_R), pY - (6 * SC_R), 0))
         makeText(fixBtnRoot, this.layer, "Txt", "FIX", FS_SMALL * SC_R * TS, C_WHITE, new vec3(0, 0, 0.2), 16 * SC_R * TS, 8 * SC_R * TS)
@@ -337,10 +344,40 @@ export class DeviceDetailPanel {
         const pt = new vec3(Math.cos(a) * radius * scores[i], Math.sin(a) * radius * scores[i], 0);
         dataPts.push(pt);
         
-        const labelOffset = 18 * SC_R;
+        const labelOffset = 26 * SC_R;
         const lp = new vec3(Math.cos(a) * (radius + labelOffset), Math.sin(a) * (radius + labelOffset), 0);
         
-        makeText(radarRoot, this.layer, `Lbl_${i}`, labels[i], FS_TINY * SC_R * TS, C_CYAN, lp, 60 * SC_R * TS, 20 * SC_R * TS, HorizontalAlignment.Center);
+        const labelRoot = makeObject(radarRoot, this.layer, `LblRoot_${i}`, lp);
+        const labelVis = makeObject(labelRoot, this.layer, `LblVis_${i}`, vec3.zero());
+        makeText(labelVis, this.layer, `Lbl_${i}`, labels[i], FS_BODY * SC_R * TS, tColor, vec3.zero(), 120 * SC_R * TS, 40 * SC_R * TS, HorizontalAlignment.Center);
+        
+        // Question mark hint (hidden by default)
+        const qTxtR = makeText(labelVis, this.layer, `QTxt_${i}`, "?", FS_TITLE * SC_R * TS, C_CYAN, new vec3(25 * SC_R, 8 * SC_R, 0.5), 20 * SC_R * TS, 20 * SC_R * TS, HorizontalAlignment.Center, 35);
+        qTxtR.enabled = false;
+        
+        const lblBtn = labelRoot.createComponent(RectangleButton.getTypeName()) as RectangleButton;
+        lblBtn.size = new vec3(35.0 * SC_R, 15.0 * SC_R, 2.0);
+        lblBtn.initialize();
+        if (lblBtn.visual) {
+          const v = lblBtn.visual as any;
+          if (typeof v.destroy === 'function') v.destroy();
+          else if (v.getSceneObject) v.getSceneObject().destroy();
+          else if (v.sceneObject) v.sceneObject.destroy();
+        }
+
+        lblBtn.onHoverEnter.add(() => {
+            qTxtR.enabled = true;
+            labelVis.getTransform().setLocalPosition(new vec3(0, 0, 10.0)); // Float only the visuals
+        });
+        
+        lblBtn.onHoverExit.add(() => {
+            qTxtR.enabled = false;
+            labelVis.getTransform().setLocalPosition(vec3.zero()); // Reset
+        });
+        
+        const ctxStr = `You are an AI embedded in an AR cybersecurity dashboard. Briefly explain what the threat analysis metric '${labels[i]}' means in the context of a cyber spider-web threat analysis diagram. The current target device is ${this.device.hostname} (OS: ${os}). Keep it concise and highly relevant to an active AR cyber operation.`;
+        lblBtn.onTriggerUp.add(() => this.showNotebook(`METRIC: ${labels[i]}`, ctxStr));
+
         this.makeLine(radarRoot, `Axis_${i}`, vec3.zero(), new vec3(Math.cos(a) * radius, Math.sin(a) * radius, 0), 0.5 * SC_R, new vec4(0, 1, 0.8, 0.4));
       }
       
@@ -404,8 +441,9 @@ export class DeviceDetailPanel {
         const textW = (l_s_w - (70 * SC_L)) * TS
         const startX = -l_s_w/2 + (15 * SC_L)
         const posX = startX + textW/2
-        makeText(leftRoot, this.layer, `Prob_${i}`, `[${prob.priority}] ${prob.description}`, FS_SMALL * SC_L * TS, pColor, new vec3(posX, pY, 0), textW, 16 * SC_L * TS, HorizontalAlignment.Left)
         
+        makeText(leftRoot, this.layer, `Prob_${i}`, `[${prob.priority}] ${prob.description}`, FS_SMALL * SC_L * TS, pColor, new vec3(posX, pY, 0), textW, 16 * SC_L * TS, HorizontalAlignment.Left)
+
         // FIX button
         const fixBtnRoot = makeObject(leftRoot, this.layer, `FixBtn_${i}`, new vec3((l_s_w/2) - (28 * SC_L), pY - (6 * SC_L), 0))
         makeText(fixBtnRoot, this.layer, "Txt", "FIX", FS_SMALL * SC_L * TS, C_WHITE, new vec3(0, 0, 0.2), 16 * SC_L * TS, 8 * SC_L * TS)
@@ -449,7 +487,36 @@ export class DeviceDetailPanel {
           const pStr = pVal.toString();
           const portStr = commonPorts[pStr] ? `${pStr}\n(${commonPorts[pStr]})` : pStr;
           
-          makeText(netCenter, this.layer, `Port_${i}`, portStr, FS_TINY * SC_L * TS, C_GREEN, new vec3(px, py, 0), 40 * SC_L * TS, 20 * SC_L * TS, HorizontalAlignment.Center);
+          const portRoot = makeObject(netCenter, this.layer, `PortRoot_${i}`, new vec3(px, py, 0));
+          const portVis = makeObject(portRoot, this.layer, `PortVis_${i}`, vec3.zero());
+          makeText(portVis, this.layer, `PortTxt_${i}`, portStr, FS_SMALL * SC_L * TS, C_GREEN, vec3.zero(), 80 * SC_L * TS, 40 * SC_L * TS, HorizontalAlignment.Center);
+          
+          // Question mark for info hint (hidden by default)
+          const qTxt = makeText(portVis, this.layer, `QTxt_${i}`, "?", FS_TITLE * SC_L * TS, C_CYAN, new vec3(12 * SC_L, 8 * SC_L, 0.5), 20 * SC_L * TS, 20 * SC_L * TS, HorizontalAlignment.Center, 35);
+          qTxt.enabled = false;
+          
+          const pBtn = portRoot.createComponent(RectangleButton.getTypeName()) as RectangleButton;
+          pBtn.size = new vec3(10.0, 10.0, 2.0);
+          pBtn.initialize();
+          if (pBtn.visual) {
+            const v = pBtn.visual as any;
+            if (typeof v.destroy === 'function') v.destroy();
+            else if (v.getSceneObject) v.getSceneObject().destroy();
+            else if (v.sceneObject) v.sceneObject.destroy();
+          }
+
+          pBtn.onHoverEnter.add(() => {
+            qTxt.enabled = true;
+            portVis.getTransform().setLocalPosition(new vec3(0, 0, 10.0)); // Float only the visuals
+          });
+          
+          pBtn.onHoverExit.add(() => {
+            qTxt.enabled = false;
+            portVis.getTransform().setLocalPosition(vec3.zero()); // Reset
+          });
+
+          pBtn.onTriggerUp.add(() => this.showNotebook(`Port ${pStr}`, `Open port ${pStr} on ${this.device.hostname}`));
+
           this.makeLine(netCenter, `PLine_${i}`, vec3.zero(), new vec3(px, py, 0), 0.5 * SC_L, new vec4(1, 0.2, 0.2, 0.3));
         }
       }
@@ -615,6 +682,101 @@ export class DeviceDetailPanel {
         approveBtn.enabled = true
       }
     })
+  }
+
+  private notebookRoot: SceneObject | null = null;
+
+  public showNotebook(topic: string, contextStr?: string): void {
+    if (this.notebookRoot) {
+      this.notebookRoot.destroy();
+      this.notebookRoot = null;
+    }
+
+    // Hide monitors
+    if (this.uiRoot) this.uiRoot.enabled = false;
+
+    // Placed lower to eye level
+    this.notebookRoot = makeObject(this.panelRoot, this.layer, "NotebookRoot", new vec3(0, 0.0, 20.0));
+    let uiNode = this.notebookRoot;
+
+    if (this.notebookPrefab) {
+      const nbInstance = this.notebookPrefab.instantiate(this.notebookRoot);
+      nbInstance.getTransform().setLocalPosition(this.notebookOffset);
+      nbInstance.getTransform().setLocalScale(new vec3(this.notebookScale, this.notebookScale, this.notebookScale));
+      uiNode = makeObject(this.notebookRoot, this.layer, "NotebookUINode", vec3.zero());
+    } else {
+      makePlate(this.notebookRoot, this.layer, "Bg", new vec2(50.0, 40.0), vec3.zero(), new vec4(0, 0, 0, 0.95), 5.0, C_CYAN, 0.5, 0);
+      uiNode = makeObject(this.notebookRoot, this.layer, "NotebookUINode", vec3.zero());
+    }
+
+    const C_GLOW_GREEN = new vec4(0.0, 1.0, 0.25, 1.0);
+    
+    // Position text in the exact same screen region as the Shell Terminal
+    const titleTxt = makeText(uiNode, this.layer, "NTitle", `[ INFO: ${topic.toUpperCase()} ]`, FS_SMALL, C_GLOW_GREEN, this.notebookTitlePos, 22.0, 10.0, HorizontalAlignment.Center);
+    
+    // Height is 80.0. With VerticalAlignment.Top, text starts at y + (height/2).
+    const bodyTxt = makeText(uiNode, this.layer, "NBody", "LOADING...", FS_SMALL, C_WHITE, this.notebookTextPos, 16.0, 80.0, HorizontalAlignment.Left, 30, true, VerticalAlignment.Top);
+
+    // Minimalist, sophisticated close button at top-left
+    const closeBtnRoot = makeObject(uiNode, this.layer, "NCloseBtn", this.notebookCloseBtnPos);
+    
+    // Explicit red circular background plate
+    const bgPlate = makePlate(closeBtnRoot, this.layer, "CBg", new vec2(1.5, 1.5), new vec3(0, 0, 0.0), new vec4(0.8, 0.1, 0.1, 1.0), 30, undefined, 0, 0.75);
+    
+    // The "X" text (shifted slightly forward in Z to avoid clipping with the red plate)
+    makeText(closeBtnRoot, this.layer, "CTxt", "X", FS_TINY, C_WHITE, new vec3(0, 0, 0.5), 10.0, 10.0);
+    
+    const closeBtn = closeBtnRoot.createComponent(RectangleButton.getTypeName()) as RectangleButton;
+    closeBtn.size = new vec3(5.0, 5.0, 4.0);
+    closeBtn.initialize();
+    if (closeBtn.visual) {
+      const v = closeBtn.visual as any;
+      if (typeof v.destroy === 'function') v.destroy();
+      else if (v.getSceneObject) v.getSceneObject().destroy();
+      else if (v.sceneObject) v.sceneObject.destroy();
+    }
+
+    // Manual Hover effects on our perfect circle
+    closeBtn.onHoverEnter.add(() => { bgPlate.backgroundColor = new vec4(1.0, 0.3, 0.3, 1.0); });
+    closeBtn.onHoverExit.add(() => { bgPlate.backgroundColor = new vec4(0.8, 0.1, 0.1, 1.0); });
+    closeBtn.onTriggerUp.add(() => {
+      if (this.notebookRoot) {
+        this.notebookRoot.destroy();
+        this.notebookRoot = null;
+      }
+      if (this.uiRoot) this.uiRoot.enabled = true;
+    });
+
+    if (!this.apiUrlBase) {
+      bodyTxt.text = "OFFLINE MODE";
+      return;
+    }
+
+    try {
+      const request = RemoteServiceHttpRequest.create();
+      request.url = `${this.apiUrlBase}/api/learn`;
+      request.method = RemoteServiceHttpRequest.HttpRequestMethod.Post;
+      request.setHeader("Content-Type", "application/json");
+      request.body = JSON.stringify({
+        topic: topic,
+        context: contextStr || ""
+      });
+
+      this.internetModule.performHttpRequest(request, (response: RemoteServiceHttpResponse) => {
+        if (response.statusCode === 200) {
+          try {
+            const data = JSON.parse(response.body);
+            bodyTxt.text = data.info || "No explanation returned.";
+          } catch (e) {
+            bodyTxt.text = `PARSE ERROR: ${response.body}`;
+          }
+        } else {
+          bodyTxt.text = `API ERROR: ${response.statusCode}\n${response.body}`;
+        }
+      });
+    } catch (e) {
+      bodyTxt.text = "NETWORK EXCEPTION";
+    }
   }
 
   private makeLine(parent: SceneObject, name: string, start: vec3, end: vec3, thickness: number, color: vec4): void {

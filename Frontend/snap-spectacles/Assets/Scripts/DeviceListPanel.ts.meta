@@ -41,6 +41,12 @@
     modelOffsetY: false
     modelOffsetZ: false
     modelScale: false
+    notebookCloseBtnPos: false
+    notebookOffset: false
+    notebookPrefab: false
+    notebookScale: false
+    notebookTextPos: false
+    notebookTitlePos: false
     phonePrefab: false
     rightUIOffset: false
     rightUIRot: false
@@ -85,6 +91,12 @@
       shellTerminalPrefab: !<reference.ObjectPrefab> 4e1c6b0c-726d-40aa-a322-9070fa1ba1d5
       shellTerminalScale: 0.020000
       shellTerminalOffset: !<Vec3> {x: -15.000000, y: -8.000000, z: 0.000000}
+      notebookPrefab: !<reference.ObjectPrefab> 00000000-0000-0000-0000-000000000000
+      notebookScale: 0.160000
+      notebookOffset: !<Vec3> {x: -15.000000, y: -8.000000, z: 0.000000}
+      notebookTitlePos: !<Vec3> {x: -3.500000, y: 17.500000, z: 2.000000}
+      notebookTextPos: !<Vec3> {x: -4.000000, y: -27.000000, z: 2.000000}
+      notebookCloseBtnPos: !<Vec3> {x: -20.000000, y: 17.500000, z: 2.000000}
   ScriptTypes:
     -
       {}
@@ -114,3 +126,9 @@
     - // @input Asset.ObjectPrefab shellTerminalPrefab
     - '// @input float shellTerminalScale = 0.02 {"hint":"Scale multiplier for the shell terminal (default 0.02)"}'
     - '// @input vec3 shellTerminalOffset = {-15,-8,0} {"hint":"Local position offset for the shell terminal"}'
+    - // @input Asset.ObjectPrefab notebookPrefab
+    - '// @input float notebookScale = 0.16 {"hint":"Scale multiplier for the notebook (default 0.16)"}'
+    - '// @input vec3 notebookOffset = {-15,-8,0} {"hint":"Local position offset for the notebook"}'
+    - '// @input vec3 notebookTitlePos = {-3.5,17.5,2} {"hint":"Local position for notebook Title"}'
+    - '// @input vec3 notebookTextPos = {-4,-27,2} {"hint":"Local position for notebook Body text"}'
+    - '// @input vec3 notebookCloseBtnPos = {-16,17.5,2} {"hint":"Local position for notebook Close Button"}'

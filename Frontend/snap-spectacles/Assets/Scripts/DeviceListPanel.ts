@@ -192,7 +192,8 @@ export function makeText(
   height: number,
   horizontalAlignment: HorizontalAlignment = HorizontalAlignment.Center,
   renderOrder: number = 30,
-  wrap: boolean = false
+  wrap: boolean = false,
+  verticalAlignment: VerticalAlignment = VerticalAlignment.Center
 ): Text {
   const object = makeObject(parent, layer, name, localPosition)
   const text = object.createComponent("Component.Text") as Text
@@ -206,7 +207,7 @@ export function makeText(
   text.textFill.mode = TextFillMode.Solid
   text.textFill.color = color
   text.horizontalAlignment = horizontalAlignment
-  text.verticalAlignment = VerticalAlignment.Center
+  text.verticalAlignment = verticalAlignment
   text.horizontalOverflow = wrap ? HorizontalOverflow.Wrap : HorizontalOverflow.Truncate
   text.verticalOverflow = VerticalOverflow.Truncate
   text.stretchMode = StretchMode.FitHeight
@@ -581,6 +582,30 @@ export class DeviceListPanel extends BaseScriptComponent {
   @hint("Local position offset for the shell terminal")
   shellTerminalOffset: vec3 = new vec3(-15.0, -8.0, 0.0)
 
+  @input
+  @allowUndefined
+  notebookPrefab?: ObjectPrefab
+
+  @input
+  @hint("Scale multiplier for the notebook (default 0.16)")
+  notebookScale: number = 0.16
+
+  @input
+  @hint("Local position offset for the notebook")
+  notebookOffset: vec3 = new vec3(-15.0, -8.0, 0.0)
+
+  @input
+  @hint("Local position for notebook Title")
+  notebookTitlePos: vec3 = new vec3(-3.5, 17.5, 2.0)
+
+  @input
+  @hint("Local position for notebook Body text")
+  notebookTextPos: vec3 = new vec3(-4.0, -27.0, 2.0)
+
+  @input
+  @hint("Local position for notebook Close Button")
+  notebookCloseBtnPos: vec3 = new vec3(-16.0, 17.5, 2.0)
+
   public onDeviceReadyToPin: ((device: Device) => void) | null = null
 
   private panelRoot: SceneObject
@@ -685,7 +710,13 @@ export class DeviceListPanel extends BaseScriptComponent {
               apiUrlBase,
               this.shellTerminalPrefab,
               this.shellTerminalScale,
-              this.shellTerminalOffset
+              this.shellTerminalOffset,
+              this.notebookPrefab,
+              this.notebookScale,
+              this.notebookOffset,
+              this.notebookTitlePos,
+              this.notebookTextPos,
+              this.notebookCloseBtnPos
             )
             
             // Keep it expanded if the old one was expanded
@@ -1085,7 +1116,13 @@ export class DeviceListPanel extends BaseScriptComponent {
           apiUrlBase,
           this.shellTerminalPrefab,
           this.shellTerminalScale,
-          this.shellTerminalOffset
+          this.shellTerminalOffset,
+          this.notebookPrefab,
+          this.notebookScale,
+          this.notebookOffset,
+          this.notebookTitlePos,
+          this.notebookTextPos,
+          this.notebookCloseBtnPos
         )
 
         this.activeDetailPanels.set(deviceId, detailPanel)

@@ -1,0 +1,58 @@
+- !<ObjectPrefab/2db30052-9d85-46e1-9385-a473539973c8>
+  PackagePath: ""
+  objects:
+    - !<own> 17fc8654-1104-4903-bed8-2eaa16a3fdf8
+  LazyLoading: false
+  RetainAssets: true
+- !<SceneObject/17fc8654-1104-4903-bed8-2eaa16a3fdf8>
+  PrefabRemaps:
+    - 17fc8654-1104-4903-bed8-2eaa16a3fdf8: 17fc8654-1104-4903-4127-d155e95c0207
+    - 2559837e-30cc-49f4-a4f1-0478ee950287: 2559837e-30cc-49f4-5b0e-fb87116afd78
+    - c15fcbc1-c370-4aac-bbbc-40769e5e61f3: c15fcbc1-c370-4aac-4443-bf8961a19e0c
+  Name: notebook
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 0.160000, y: 0.160000, z: 0.160000}
+    HasSegmentScaleCompensation: false
+  Children:
+    - !<own> 2559837e-30cc-49f4-a4f1-0478ee950287
+  Components:
+    []
+- !<SceneObject/2559837e-30cc-49f4-a4f1-0478ee950287>
+  PrefabRemaps:
+    []
+  Name: ""
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> c15fcbc1-c370-4aac-bbbc-40769e5e61f3
+- !<RenderMeshVisual/c15fcbc1-c370-4aac-bbbc-40769e5e61f3>
+  PrefabRemaps:
+    []
+  Name: component_0
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 8ac9b1f8-0e05-4aea-9311-4f4cf267e017
+  Mesh: !<reference> 271aa549-cbb4-421a-9a86-d970af73fed6
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
