@@ -8,6 +8,8 @@ export class WorldScannerEffect extends BaseScriptComponent {
   @hint("Duration of the scan in seconds")
   scanDuration: number = 5.0
 
+  public scanningAudio?: AudioComponent
+
   private material: Material
 
   onAwake(): void {
@@ -23,6 +25,10 @@ export class WorldScannerEffect extends BaseScriptComponent {
     if (!this.meshVisual || !this.material) {
       print("WorldScannerEffect: Missing meshVisual or material!")
       return
+    }
+
+    if (this.scanningAudio) {
+      this.scanningAudio.play(-1) // Loop endlessly while scanning
     }
 
     let t = 0
@@ -47,6 +53,9 @@ export class WorldScannerEffect extends BaseScriptComponent {
       else {
         alpha = 0
         this.removeEvent(updateEvent)
+        if (this.scanningAudio) {
+          this.scanningAudio.stop(false)
+        }
       }
       
       this.setAlpha(alpha)

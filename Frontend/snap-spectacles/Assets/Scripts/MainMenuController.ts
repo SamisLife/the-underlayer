@@ -23,6 +23,16 @@ export class MainMenuController extends BaseScriptComponent {
   @hint("ESP32 Hologram Prefab")
   esp32Prefab: ObjectPrefab
 
+  @input
+  @allowUndefined
+  @hint("Sound for clicking buttons")
+  clickAudio: AudioComponent
+
+  @input
+  @allowUndefined
+  @hint("Looping sound during scan")
+  scanningAudio: AudioComponent
+
   private menuRoot: SceneObject
   private layer: LayerSet
 
@@ -236,6 +246,9 @@ export class MainMenuController extends BaseScriptComponent {
   }
 
   private switchState(newState: "MINIMIZED" | "EXPANDED" | "SCAN" | "DEVICES"): void {
+    if (this.clickAudio) {
+      this.clickAudio.play(1);
+    }
     this.state = newState
 
     this.minimizedBtnRoot.enabled = (newState === "MINIMIZED" || newState === "EXPANDED")
@@ -256,6 +269,7 @@ export class MainMenuController extends BaseScriptComponent {
       if (this.worldScanner) {
         const scanner = this.worldScanner as unknown as any
         if (typeof scanner.triggerScan === "function") {
+          scanner.scanningAudio = this.scanningAudio
           scanner.triggerScan()
         }
       }

@@ -54,7 +54,10 @@ export class DeviceDetailPanel {
     private notebookOffset: vec3 = new vec3(15.0, -8.0, 0.0),
     private notebookTitlePos: vec3 = new vec3(-3.5, 17.5, 2.0),
     private notebookTextPos: vec3 = new vec3(-4.0, -27.0, 2.0),
-    private notebookCloseBtnPos: vec3 = new vec3(-20.0, 17.5, 2.0)
+    private notebookCloseBtnPos: vec3 = new vec3(-20.0, 17.5, 2.0),
+    public analyzeAudio?: AudioComponent,
+    public openAudio?: AudioComponent,
+    public selectAudio?: AudioComponent
   ) {
     // Create the main panel root at the chosen world position
     this.panelRoot = makeObject(parentRoot, layer, `UL_Detail_${device.hostname}`)
@@ -93,7 +96,12 @@ export class DeviceDetailPanel {
       else if (v.getSceneObject) v.getSceneObject().destroy()
       else if (v.sceneObject) v.sceneObject.destroy()
     }
-    indBtn.onTriggerUp.add(() => this.setExpanded(true))
+    indBtn.onTriggerUp.add(() => {
+      if (this.openAudio) {
+        this.openAudio.play(1)
+      }
+      this.setExpanded(true)
+    })
 
     // 2. Expanded UI (Triple Monitors)
     this.uiRoot = makeObject(this.panelRoot, this.layer, "UI_Root", new vec3(0, 15.0, 0))
@@ -376,7 +384,10 @@ export class DeviceDetailPanel {
         });
         
         const ctxStr = `You are an AI embedded in an AR cybersecurity dashboard. Briefly explain what the threat analysis metric '${labels[i]}' means in the context of a cyber spider-web threat analysis diagram. The current target device is ${this.device.hostname} (OS: ${os}). Keep it concise and highly relevant to an active AR cyber operation.`;
-        lblBtn.onTriggerUp.add(() => this.showNotebook(`METRIC: ${labels[i]}`, ctxStr));
+        lblBtn.onTriggerUp.add(() => {
+          if (this.selectAudio) this.selectAudio.play(1)
+          this.showNotebook(`METRIC: ${labels[i]}`, ctxStr)
+        });
 
         this.makeLine(radarRoot, `Axis_${i}`, vec3.zero(), new vec3(Math.cos(a) * radius, Math.sin(a) * radius, 0), 0.5 * SC_R, new vec4(0, 1, 0.8, 0.4));
       }
@@ -515,7 +526,10 @@ export class DeviceDetailPanel {
             portVis.getTransform().setLocalPosition(vec3.zero()); // Reset
           });
 
-          pBtn.onTriggerUp.add(() => this.showNotebook(`Port ${pStr}`, `Open port ${pStr} on ${this.device.hostname}`));
+          pBtn.onTriggerUp.add(() => {
+            if (this.selectAudio) this.selectAudio.play(1)
+            this.showNotebook(`Port ${pStr}`, `Open port ${pStr} on ${this.device.hostname}`)
+          });
 
           this.makeLine(netCenter, `PLine_${i}`, vec3.zero(), new vec3(px, py, 0), 0.5 * SC_L, new vec4(1, 0.2, 0.2, 0.3));
         }
@@ -539,12 +553,17 @@ export class DeviceDetailPanel {
     this.analysisStartTime = getTime()
     this.analysisCompleted = false
 
+    if (this.analyzeAudio) {
+      this.analyzeAudio.play(1)
+    }
+
     try {
       const request = RemoteServiceHttpRequest.create()
       request.url = `${this.apiUrlBase}/api/analyze/${this.device.hostname}`
       request.method = RemoteServiceHttpRequest.HttpRequestMethod.Post
       
       this.internetModule.performHttpRequest(request, (response: RemoteServiceHttpResponse) => {
+        if (this.analyzeAudio) this.analyzeAudio.stop(false)
         this.analysisCompleted = true
         if (response.statusCode === 200) {
           if (txt) txt.text = "ANALYSIS COMPLETE"
@@ -562,6 +581,7 @@ export class DeviceDetailPanel {
         btn.enabled = true
       })
     } catch (e) {
+      if (this.analyzeAudio) this.analyzeAudio.stop(false)
       if (txt) txt.text = "ERROR"
       btn.enabled = true
       this.analysisCompleted = true
@@ -740,6 +760,7 @@ export class DeviceDetailPanel {
     closeBtn.onHoverEnter.add(() => { bgPlate.backgroundColor = new vec4(1.0, 0.3, 0.3, 1.0); });
     closeBtn.onHoverExit.add(() => { bgPlate.backgroundColor = new vec4(0.8, 0.1, 0.1, 1.0); });
     closeBtn.onTriggerUp.add(() => {
+      if (this.selectAudio) this.selectAudio.play(1)
       if (this.notebookRoot) {
         this.notebookRoot.destroy();
         this.notebookRoot = null;
@@ -848,7 +869,10 @@ export class DeviceDetailPanel {
   }
 
   private configureBtn(btn: RectangleButton, defaultColor: vec4, tapCallback: () => void): void {
-    btn.onTriggerUp.add(tapCallback)
+    btn.onTriggerUp.add(() => {
+      if (this.selectAudio) this.selectAudio.play(1)
+      tapCallback()
+    })
     const visual = btn.visual as RoundedRectangleVisual
     if (visual) {
       visual.shouldColorChange = true

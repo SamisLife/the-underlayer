@@ -26,6 +26,8 @@
   ExportUid: 00000000-0000-0000-0000-000000000000
   PackagePolicy: CanBeUnpacked
   ScriptInputsHidden:
+    analyzeAudio: false
+    anchorAudio: false
     cameraRoot: false
     centerUIOffset: false
     centerUIRot: false
@@ -38,6 +40,7 @@
     leftUIOffset: false
     leftUIRot: false
     leftUIScale: false
+    loadedAudio: false
     modelOffsetY: false
     modelOffsetZ: false
     modelScale: false
@@ -47,11 +50,13 @@
     notebookScale: false
     notebookTextPos: false
     notebookTitlePos: false
+    openAudio: false
     phonePrefab: false
     rightUIOffset: false
     rightUIRot: false
     rightUIScale: false
     routerPrefab: false
+    selectAudio: false
     shellTerminalOffset: false
     shellTerminalPrefab: false
     shellTerminalScale: false
@@ -84,6 +89,11 @@
       rightUIOffset: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
       rightUIRot: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
       indicatorScale: !<float> 1.000000
+      loadedAudio: !<reference.AudioComponent> 00000000-0000-0000-0000-000000000000
+      selectAudio: !<reference.AudioComponent> 00000000-0000-0000-0000-000000000000
+      anchorAudio: !<reference.AudioComponent> 00000000-0000-0000-0000-000000000000
+      openAudio: !<reference.AudioComponent> 00000000-0000-0000-0000-000000000000
+      analyzeAudio: !<reference.AudioComponent> 00000000-0000-0000-0000-000000000000
       indicatorMaterial: !<reference.Material> 00000000-0000-0000-0000-000000000000
       modelScale: 0.200000
       modelOffsetY: 1.500000
@@ -119,6 +129,11 @@
     - '// @input vec3 rightUIOffset = {0,0,0} {"hint":"Pos Offset for Right Monitor UI"}'
     - '// @input vec3 rightUIRot = {0,0,0} {"hint":"Rot Offset for Right Monitor UI (Degrees)"}'
     - '// @input float indicatorScale = 1 {"hint":"Scale multiplier for the indicator prefab"}'
+    - '// @input Component.AudioComponent loadedAudio {"hint":"Sound when devices finish loading from API"}'
+    - '// @input Component.AudioComponent selectAudio {"hint":"Sound when clicking a device card"}'
+    - '// @input Component.AudioComponent anchorAudio {"hint":"Sound when device is anchored"}'
+    - '// @input Component.AudioComponent openAudio {"hint":"Sound when opening the device monitors"}'
+    - '// @input Component.AudioComponent analyzeAudio {"hint":"Looping sound when analyzing"}'
     - '// @input Asset.Material indicatorMaterial {"hint":"Optional material (like Hologram.mat) to apply to the indicator for a glowing effect."}'
     - '// @input float modelScale = 0.2 {"hint":"Scale multiplier to size the 3D models down to fit the cell"}'
     - '// @input float modelOffsetY = 1.5 {"hint":"Y-axis offset to center models vertically in their cell"}'

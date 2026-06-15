@@ -307,9 +307,9 @@ class Device3DView {
     visual.baseTriggeredColor = new vec4(0, 0, 0, 0)
     visual.defaultHasBorder = false
     
-    this.button.onTriggerUp.add(() => this.handleTrigger())
-    this.button.onHoverEnter.add(() => this.handleHover(true))
-    this.button.onHoverExit.add(() => this.handleHover(false))
+    this.button.onTriggerUp.add(() => this.handleTrigger());
+    this.button.onHoverEnter.add(() => this.handleHover(true));
+    this.button.onHoverExit.add(() => this.handleHover(false));
     
     this.buildCell(accent, prefab)
   }
@@ -555,6 +555,31 @@ export class DeviceListPanel extends BaseScriptComponent {
 
   @input
   @allowUndefined
+  @hint("Sound when devices finish loading from API")
+  loadedAudio: AudioComponent
+
+  @input
+  @allowUndefined
+  @hint("Sound when clicking a device card")
+  selectAudio: AudioComponent
+
+  @input
+  @allowUndefined
+  @hint("Sound when device is anchored")
+  anchorAudio: AudioComponent
+
+  @input
+  @allowUndefined
+  @hint("Sound when opening the device monitors")
+  openAudio: AudioComponent
+
+  @input
+  @allowUndefined
+  @hint("Looping sound when analyzing")
+  analyzeAudio: AudioComponent
+
+  @input
+  @allowUndefined
   @hint("Optional material (like Hologram.mat) to apply to the indicator for a glowing effect.")
   indicatorMaterial: Material
 
@@ -641,6 +666,9 @@ export class DeviceListPanel extends BaseScriptComponent {
 
       if (eventName === "initial_devices" && Array.isArray(payload.devices)) {
         this.loadDevices(payload.devices as Device[])
+        if (this.loadedAudio) {
+          this.loadedAudio.play(1)
+        }
         return
       }
 
@@ -818,6 +846,9 @@ export class DeviceListPanel extends BaseScriptComponent {
           log.d(`Scan complete! Backend response: ${response.body}`)
           const delayed = this.createEvent("DelayedCallbackEvent") as DelayedCallbackEvent
           delayed.bind(() => {
+            if (this.loadedAudio) {
+              this.loadedAudio.play(1)
+            }
             onComplete(true)
           })
           delayed.reset(3.0)
@@ -990,7 +1021,12 @@ export class DeviceListPanel extends BaseScriptComponent {
           finalScale,
           finalOffsetY,
           this.modelOffsetZ,
-          (selectedDevice) => this.beginPinMode(selectedDevice)
+          (selectedDevice) => {
+            if (this.selectAudio) {
+              this.selectAudio.play(1)
+            }
+            this.beginPinMode(selectedDevice)
+          }
         )
       )
     })
@@ -1084,6 +1120,10 @@ export class DeviceListPanel extends BaseScriptComponent {
         // Destroy the placer (ghost model)
         placer.destroy()
 
+        if (this.anchorAudio) {
+          this.anchorAudio.play(1)
+        }
+
         const deviceId = device.deviceId
 
         // Destroy the old panel if the user is relocating the same device
@@ -1122,7 +1162,10 @@ export class DeviceListPanel extends BaseScriptComponent {
           this.notebookOffset,
           this.notebookTitlePos,
           this.notebookTextPos,
-          this.notebookCloseBtnPos
+          this.notebookCloseBtnPos,
+          this.analyzeAudio,
+          this.openAudio,
+          this.selectAudio
         )
 
         this.activeDetailPanels.set(deviceId, detailPanel)

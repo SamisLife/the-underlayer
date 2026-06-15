@@ -27,6 +27,7 @@
   PackagePolicy: CanBeUnpacked
   ScriptInputsHidden:
     cameraRoot: false
+    clickAudio: false
     deviceListPanel: false
     esp32Prefab: false
     worldScanner: false
@@ -43,6 +44,7 @@
       deviceListPanel: !<reference.ScriptComponent> 00000000-0000-0000-0000-000000000000
       worldScanner: !<reference.ScriptComponent> 00000000-0000-0000-0000-000000000000
       esp32Prefab: !<reference.ObjectPrefab> 00000000-0000-0000-0000-000000000000
+      clickAudio: !<reference.AudioComponent> 00000000-0000-0000-0000-000000000000
   ScriptTypes:
     -
       {}
@@ -51,3 +53,4 @@
     - '// @input Component.ScriptComponent deviceListPanel {"hint":"Reference to the DeviceListPanel component in the scene"}'
     - '// @input Component.ScriptComponent worldScanner {"hint":"Optional: Reference to the WorldScannerEffect component"}'
     - '// @input Asset.ObjectPrefab esp32Prefab {"hint":"ESP32 Hologram Prefab"}'
+    - '// @input Component.AudioComponent clickAudio {"hint":"Sound for clicking buttons"}'
