@@ -1,6 +1,9 @@
 import {RectangleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/RectangleButton"
 import {RoundedRectangleVisual} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangleVisual"
+import {Interactable} from "SpectaclesInteractionKit.lspkg/Components/Interaction/Interactable/Interactable"
+import {TargetingMode} from "SpectaclesInteractionKit.lspkg/Core/Interactor/Interactor"
 import {DeviceListPanel, makeObject, makePlate, makeText, C_CYAN, C_DIM, C_WHITE, FS_TITLE, FS_SMALL} from "./DeviceListPanel"
+import {DemoState} from "./Data/DeviceTypes"
 import {lerp} from "SpectaclesInteractionKit.lspkg/Utils/mathUtils"
 
 @component
@@ -30,6 +33,11 @@ export class MainMenuController extends BaseScriptComponent {
 
   @input
   @allowUndefined
+  @hint("Snap UI Toggle Prefab for Demo Mode")
+  uiTogglePrefab: ObjectPrefab
+
+  @input
+  @allowUndefined
   @hint("Looping sound during scan")
   scanningAudio: AudioComponent
 
@@ -39,6 +47,7 @@ export class MainMenuController extends BaseScriptComponent {
   private state: "MINIMIZED" | "EXPANDED" | "SCAN" | "DEVICES" = "MINIMIZED"
 
   private minimizedBtnRoot: SceneObject
+  private demoBtnRoot: SceneObject
   private expandedContainer: SceneObject
   private scanContainer: SceneObject
   private devicesBackContainer: SceneObject
@@ -97,7 +106,125 @@ export class MainMenuController extends BaseScriptComponent {
     }
 
     const updateEvent = this.createEvent("UpdateEvent") as UpdateEvent
+    this.buildDemoMenu()
+    
     updateEvent.bind(() => this.onUpdate())
+  }
+
+  private buildDemoMenu(): void {
+    if (this.uiTogglePrefab) {
+      // Parent to menuRoot so it doesn't open the menu when clicked
+      this.demoBtnRoot = makeObject(this.menuRoot, this.layer, "Btn_Demo")
+      this.demoBtnRoot.getTransform().setLocalPosition(new vec3(0, -6.0, 0))
+
+      const toggleObj = this.uiTogglePrefab.instantiate(this.demoBtnRoot)
+      toggleObj.getTransform().setLocalPosition(new vec3(-3.0, 0, 0))
+
+      // Text shifted 30% left and 2.5% lower (Y: 0.25)
+      const demoTxt = makeText(this.demoBtnRoot, this.layer, "Txt", "DEMO MODE", FS_SMALL, DemoState.isDemoMode ? C_CYAN : C_DIM, new vec3(1.5, 0.25, 0.2), 15.0, 4.0)
+
+      // Invisible click catcher
+      const clickerRoot = makeObject(this.demoBtnRoot, this.layer, "Clicker")
+      const collider = clickerRoot.createComponent("Physics.ColliderComponent") as ColliderComponent
+      collider.fitVisual = false
+      const boxShape = Shape.createBoxShape()
+      boxShape.size = new vec3(22.0, 6.0, 2.0)
+      collider.shape = boxShape
+
+      const interactable = clickerRoot.createComponent(Interactable.getTypeName()) as Interactable
+      interactable.targetingMode = TargetingMode.All
+
+      let toggleScript: any = null
+      let nativelyBound = false
+      const scripts = toggleObj.getComponents("Component.ScriptComponent") as ScriptComponent[]
+      for (let i = 0; i < scripts.length; i++) {
+        const s = scripts[i] as any
+        if (s.onValueChange || s.onStateChanged || s.toggle || (s.api && s.api.toggle)) {
+          toggleScript = s
+        }
+        
+        // Always listen to the native toggle events in case the user clicks the toggle's own hitbox!
+        if (s.onValueChange && typeof s.onValueChange.add === "function") {
+          s.onValueChange.add((isOn: boolean) => {
+            DemoState.isDemoMode = isOn
+            demoTxt.textFill.color = isOn ? C_CYAN : C_DIM
+          })
+          nativelyBound = true
+        } else if (s.onStateChanged && typeof s.onStateChanged.add === "function") {
+          s.onStateChanged.add((isOn: boolean) => {
+            DemoState.isDemoMode = isOn
+            demoTxt.textFill.color = isOn ? C_CYAN : C_DIM
+          })
+          nativelyBound = true
+        }
+      }
+
+      // Force the Toggle prefab's visual state to match our code's default DemoState (false)
+      // MUST BE DEFERRED to prevent SIK lifecycle race conditions overriding our command!
+      if (toggleScript) {
+         let hasSynced = false
+         const syncEvent = this.createEvent("UpdateEvent")
+         syncEvent.bind(() => {
+             if (!hasSynced) {
+                 hasSynced = true
+                 
+                 // Now that SIK is fully initialized, force the visual state to match our code
+                 if (typeof toggleScript.toggle === "function") {
+                     // If it exposes isToggledOn, ensure we don't double-toggle if it's already in the correct state
+                     const currentlyOn = ('isToggledOn' in toggleScript) ? toggleScript.isToggledOn : true
+                     if (currentlyOn !== DemoState.isDemoMode) toggleScript.toggle()
+                 }
+                 else if (typeof toggleScript.setState === "function") toggleScript.setState(DemoState.isDemoMode)
+                 else if (toggleScript.api && typeof toggleScript.api.setState === "function") toggleScript.api.setState(DemoState.isDemoMode)
+                 else if ('isToggledOn' in toggleScript) toggleScript.isToggledOn = DemoState.isDemoMode
+                 
+                 // Remove this event so it only runs once
+                 this.removeEvent(syncEvent)
+             }
+         })
+      }
+
+      interactable.onTriggerEnd.add(() => {
+        if (toggleScript) {
+           // We ask the toggle script to flip. Its event handler will update DemoState for us!
+           if (typeof toggleScript.toggle === "function") toggleScript.toggle()
+           else if (toggleScript.api && typeof toggleScript.api.toggle === "function") toggleScript.api.toggle()
+           else if (typeof toggleScript.setState === "function") toggleScript.setState(!DemoState.isDemoMode)
+           else if (toggleScript.api && typeof toggleScript.api.setState === "function") toggleScript.api.setState(!DemoState.isDemoMode)
+        }
+        
+        // If we somehow failed to bind natively, fallback to manual state sync
+        if (!nativelyBound) {
+           DemoState.isDemoMode = !DemoState.isDemoMode
+           demoTxt.textFill.color = DemoState.isDemoMode ? C_CYAN : C_DIM
+        }
+      })
+
+      return
+    }
+
+    // Fallback programmatic toggle if the prefab isn't linked
+    this.demoBtnRoot = makeObject(this.minimizedBtnRoot, this.layer, "Btn_Demo")
+    this.demoBtnRoot.getTransform().setLocalPosition(new vec3(0, -6.0, 0))
+
+    const demoTxt = makeText(this.demoBtnRoot, this.layer, "Txt", "[ ] DEMO MODE", FS_SMALL, C_DIM, new vec3(0, 0, 0.2), 15.0, 4.0)
+
+    const demoScript = this.demoBtnRoot.createComponent("Component.ScriptComponent") as ScriptComponent
+    const demoBtn = this.demoBtnRoot.createComponent(RectangleButton.getTypeName()) as RectangleButton
+    demoBtn.size = new vec3(15.0, 4.0, 2.0)
+    demoBtn.initialize()
+
+    this.configureBtn(demoBtn, new vec4(0.1, 0.1, 0.1, 0.0), C_CYAN, () => {
+      DemoState.isDemoMode = !DemoState.isDemoMode
+      demoTxt.text = DemoState.isDemoMode ? "[X] DEMO MODE" : "[ ] DEMO MODE"
+      demoTxt.textFill.color = DemoState.isDemoMode ? C_CYAN : C_DIM
+      if (demoBtn.visual) {
+         const v = demoBtn.visual as RoundedRectangleVisual
+         v.baseDefaultColor = DemoState.isDemoMode ? new vec4(0.05, 0.25, 0.25, 0.3) : new vec4(0.1, 0.1, 0.1, 0.0)
+         v.baseHoveredColor = new vec4(v.baseDefaultColor.r + 0.1, v.baseDefaultColor.g + 0.1, v.baseDefaultColor.b + 0.6, 1.0)
+         v.baseTriggeredColor = new vec4(v.baseDefaultColor.r + 0.2, v.baseDefaultColor.g + 0.2, v.baseDefaultColor.b + 0.8, 1.0)
+      }
+    })
   }
 
   private configureBtn(btn: RectangleButton, defaultColor: vec4, borderColor: vec4, tapCallback: () => void): void {
@@ -252,6 +379,9 @@ export class MainMenuController extends BaseScriptComponent {
     this.state = newState
 
     this.minimizedBtnRoot.enabled = (newState === "MINIMIZED" || newState === "EXPANDED")
+    if (this.demoBtnRoot) {
+      this.demoBtnRoot.enabled = (newState === "MINIMIZED")
+    }
     this.scanContainer.enabled = (newState === "SCAN")
     this.devicesBackContainer.enabled = (newState === "DEVICES")
 

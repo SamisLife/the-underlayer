@@ -1,7 +1,9 @@
 import {RectangleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/RectangleButton"
 import {RoundedRectangle} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangle"
 import {RoundedRectangleVisual} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangleVisual"
-import {Device} from "./Data/DeviceTypes"
+import {Interactable} from "SpectaclesInteractionKit.lspkg/Components/Interaction/Interactable/Interactable"
+import {TargetingMode} from "SpectaclesInteractionKit.lspkg/Core/Interactor/Interactor"
+import {Device, DemoState} from "./Data/DeviceTypes"
 import {
   C_CYAN,
   C_DIM,
@@ -363,28 +365,27 @@ export class DeviceDetailPanel {
         const qTxtR = makeText(labelVis, this.layer, `QTxt_${i}`, "?", FS_TITLE * SC_R * TS, C_CYAN, new vec3(25 * SC_R, 8 * SC_R, 0.5), 20 * SC_R * TS, 20 * SC_R * TS, HorizontalAlignment.Center, 35);
         qTxtR.enabled = false;
         
-        const lblBtn = labelRoot.createComponent(RectangleButton.getTypeName()) as RectangleButton;
-        lblBtn.size = new vec3(35.0 * SC_R, 15.0 * SC_R, 2.0);
-        lblBtn.initialize();
-        if (lblBtn.visual) {
-          const v = lblBtn.visual as any;
-          if (typeof v.destroy === 'function') v.destroy();
-          else if (v.getSceneObject) v.getSceneObject().destroy();
-          else if (v.sceneObject) v.sceneObject.destroy();
-        }
+        const collider = labelRoot.createComponent("Physics.ColliderComponent") as ColliderComponent;
+        collider.fitVisual = false;
+        const boxShape = Shape.createBoxShape();
+        boxShape.size = new vec3(35.0 * SC_R, 15.0 * SC_R, 2.0);
+        collider.shape = boxShape;
 
-        lblBtn.onHoverEnter.add(() => {
+        const interactable = labelRoot.createComponent(Interactable.getTypeName()) as Interactable;
+        interactable.targetingMode = TargetingMode.All;
+
+        interactable.onHoverEnter.add(() => {
             qTxtR.enabled = true;
             labelVis.getTransform().setLocalPosition(new vec3(0, 0, 10.0)); // Float only the visuals
         });
         
-        lblBtn.onHoverExit.add(() => {
+        interactable.onHoverExit.add(() => {
             qTxtR.enabled = false;
             labelVis.getTransform().setLocalPosition(vec3.zero()); // Reset
         });
-        
+
         const ctxStr = `You are an AI embedded in an AR cybersecurity dashboard. Briefly explain what the threat analysis metric '${labels[i]}' means in the context of a cyber spider-web threat analysis diagram. The current target device is ${this.device.hostname} (OS: ${os}). Keep it concise and highly relevant to an active AR cyber operation.`;
-        lblBtn.onTriggerUp.add(() => {
+        interactable.onTriggerEnd.add(() => {
           if (this.selectAudio) this.selectAudio.play(1)
           this.showNotebook(`METRIC: ${labels[i]}`, ctxStr)
         });
@@ -506,27 +507,26 @@ export class DeviceDetailPanel {
           const qTxt = makeText(portVis, this.layer, `QTxt_${i}`, "?", FS_TITLE * SC_L * TS, C_CYAN, new vec3(12 * SC_L, 8 * SC_L, 0.5), 20 * SC_L * TS, 20 * SC_L * TS, HorizontalAlignment.Center, 35);
           qTxt.enabled = false;
           
-          const pBtn = portRoot.createComponent(RectangleButton.getTypeName()) as RectangleButton;
-          pBtn.size = new vec3(10.0, 10.0, 2.0);
-          pBtn.initialize();
-          if (pBtn.visual) {
-            const v = pBtn.visual as any;
-            if (typeof v.destroy === 'function') v.destroy();
-            else if (v.getSceneObject) v.getSceneObject().destroy();
-            else if (v.sceneObject) v.sceneObject.destroy();
-          }
+          const collider = portRoot.createComponent("Physics.ColliderComponent") as ColliderComponent;
+          collider.fitVisual = false;
+          const boxShape = Shape.createBoxShape();
+          boxShape.size = new vec3(15.0, 15.0, 2.0); // Slightly larger hitbox
+          collider.shape = boxShape;
 
-          pBtn.onHoverEnter.add(() => {
+          const interactable = portRoot.createComponent(Interactable.getTypeName()) as Interactable;
+          interactable.targetingMode = TargetingMode.All;
+
+          interactable.onHoverEnter.add(() => {
             qTxt.enabled = true;
             portVis.getTransform().setLocalPosition(new vec3(0, 0, 10.0)); // Float only the visuals
           });
           
-          pBtn.onHoverExit.add(() => {
+          interactable.onHoverExit.add(() => {
             qTxt.enabled = false;
             portVis.getTransform().setLocalPosition(vec3.zero()); // Reset
           });
 
-          pBtn.onTriggerUp.add(() => {
+          interactable.onTriggerEnd.add(() => {
             if (this.selectAudio) this.selectAudio.play(1)
             this.showNotebook(`Port ${pStr}`, `Open port ${pStr} on ${this.device.hostname}`)
           });
@@ -544,7 +544,7 @@ export class DeviceDetailPanel {
   }
 
   private triggerAnalysis(btn: RectangleButton, root: SceneObject): void {
-    if (!this.apiUrlBase) return
+    if (!this.apiUrlBase && !DemoState.isDemoMode) return
     btn.enabled = false
     const txt = root.getChild(0).getComponent("Component.Text") as Text
     if (txt) txt.text = "ANALYZING..."
@@ -555,6 +555,29 @@ export class DeviceDetailPanel {
 
     if (this.analyzeAudio) {
       this.analyzeAudio.play(1)
+    }
+
+    if (DemoState.isDemoMode) {
+      const delay = root.createComponent("Component.ScriptComponent") as ScriptComponent
+      const ev = delay.createEvent("DelayedCallbackEvent") as DelayedCallbackEvent
+      ev.bind(() => {
+        if (this.analyzeAudio) this.analyzeAudio.stop(false)
+        this.analysisCompleted = true
+        if (txt) txt.text = "ANALYSIS COMPLETE"
+        btn.enabled = true
+        
+        // Dynamically inject the mock problems to simulate a completed analysis finding new issues!
+        const MOCK_PROBLEMS = require("./Data/MockDevices").MOCK_PROBLEMS
+        if (MOCK_PROBLEMS && MOCK_PROBLEMS[this.device.hostname]) {
+            if (!this.device.ar_summary) this.device.ar_summary = {} as any
+            this.device.ar_summary.problems = MOCK_PROBLEMS[this.device.hostname]
+            
+            // Force the UI to rebuild and render the newly discovered Action Items
+            this.updateDeviceData(this.device)
+        }
+      })
+      ev.reset(5.0)
+      return
     }
 
     try {
@@ -662,6 +685,20 @@ export class DeviceDetailPanel {
       const txt = approveBtnRoot.getChild(0).getComponent("Component.Text") as Text
       if (txt) txt.text = "EXECUTING..."
       
+      if (DemoState.isDemoMode) {
+        const delay = popupRoot.createComponent("Component.ScriptComponent") as ScriptComponent
+        const ev = delay.createEvent("DelayedCallbackEvent") as DelayedCallbackEvent
+        ev.bind(() => {
+          if (txt) txt.text = "SUCCESS"
+          const delay2 = popupRoot.createComponent("Component.ScriptComponent") as ScriptComponent
+          const closeEv = delay2.createEvent("DelayedCallbackEvent") as DelayedCallbackEvent
+          closeEv.bind(closePopup)
+          closeEv.reset(1.0)
+        })
+        ev.reset(2.0)
+        return
+      }
+
       try {
         const request = RemoteServiceHttpRequest.create()
         request.url = `${this.apiUrlBase}/api/approve-action`
@@ -768,9 +805,22 @@ export class DeviceDetailPanel {
       if (this.uiRoot) this.uiRoot.enabled = true;
     });
 
-    if (!this.apiUrlBase) {
+    if (!this.apiUrlBase && !DemoState.isDemoMode) {
       bodyTxt.text = "OFFLINE MODE";
       return;
+    }
+
+    if (DemoState.isDemoMode) {
+      const delay = uiNode.createComponent("Component.ScriptComponent") as ScriptComponent
+      const ev = delay.createEvent("DelayedCallbackEvent") as DelayedCallbackEvent
+      ev.bind(() => {
+        bodyTxt.text = "This is a simulated AI explanation for demo mode.\n\n" +
+                       `You requested info about: ${topic}\n` +
+                       "In a real environment, this data is fetched from the Underlayer backend using an LLM to explain the vulnerability or open port in context.\n\n" +
+                       "Risk has been flagged as moderate. Proceed with caution."
+      })
+      ev.reset(2.0)
+      return
     }
 
     try {
@@ -886,6 +936,12 @@ export class DeviceDetailPanel {
   public setExpanded(expanded: boolean): void {
     if (this.indicatorRoot) this.indicatorRoot.enabled = !expanded
     if (this.uiRoot) this.uiRoot.enabled = expanded
+
+    // If closing monitors in Demo Mode, wipe the mock problems and rebuild the UI
+    if (!expanded && DemoState.isDemoMode && this.device?.ar_summary?.problems) {
+      this.device.ar_summary.problems = []
+      this.updateDeviceData(this.device)
+    }
   }
 
   public isExpanded(): boolean {
@@ -982,6 +1038,11 @@ export class DeviceDetailPanel {
   }
 
   public destroy(): void {
+    // Hide problems again when the monitor is closed in Demo Mode
+    if (DemoState.isDemoMode && this.device?.ar_summary?.problems) {
+      this.device.ar_summary.problems = []
+    }
+
     if (this.panelRoot) {
       this.panelRoot.destroy()
     }

@@ -13,7 +13,7 @@ import {RectangleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/R
 import {RoundedRectangle} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangle"
 import {RoundedRectangleVisual} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangleVisual"
 
-import {Device, ThreatLevel} from "./Data/DeviceTypes"
+import {Device, ThreatLevel, DeviceSummary, ArCard, DemoState} from "./Data/DeviceTypes"
 import {MOCK_DEVICES} from "./Data/MockDevices"
 import {DevicePlacer} from "./DevicePlacer"
 import {DeviceDetailPanel} from "./DeviceDetailPanel"
@@ -806,6 +806,12 @@ export class DeviceListPanel extends BaseScriptComponent {
   }
 
   private pollDevices(apiUrl: string): void {
+    if (DemoState.isDemoMode) {
+      log.d(`[DEMO MODE] Loading mock devices list instantly...`)
+      this.handleWebSocketMessage(JSON.stringify({ event: "initial_devices", devices: MOCK_DEVICES }))
+      return
+    }
+
     try {
       const request = RemoteServiceHttpRequest.create()
       request.url = apiUrl
@@ -833,6 +839,16 @@ export class DeviceListPanel extends BaseScriptComponent {
   }
 
   public triggerBackendScan(onComplete: (success: boolean) => void): void {
+    if (DemoState.isDemoMode) {
+      log.d(`[DEMO MODE] Simulating backend scan...`)
+      const delay = this.createEvent("DelayedCallbackEvent") as DelayedCallbackEvent
+      delay.bind(() => {
+        onComplete(true)
+      })
+      delay.reset(3.0) // Simulate a realistic 3s scan time
+      return
+    }
+
     const apiUrl = this.websocketUrl.replace("ws://", "http://").replace("wss://", "https://").replace("/ws/devices", "/api/scan/trigger")
     log.d(`Sending scan trigger request to ${apiUrl}`)
 

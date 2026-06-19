@@ -6,6 +6,8 @@
 
 export type ThreatLevel = "critical" | "high" | "medium" | "low" | "unknown"
 
+export const DemoState = { isDemoMode: true }
+
 export interface OpenPort {
   port: number
   service: string

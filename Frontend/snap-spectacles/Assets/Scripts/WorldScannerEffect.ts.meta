@@ -28,7 +28,6 @@
   ScriptInputsHidden:
     meshVisual: false
     scanDuration: false
-    scanningAudio: false
   ScriptTypesHidden:
     {}
   ReadMe: !<reference> 00000000-0000-0000-0000-000000000000
@@ -40,11 +39,9 @@
   DefaultScriptInputs:
     - meshVisual: !<reference.RenderMeshVisual> 00000000-0000-0000-0000-000000000000
       scanDuration: !<float> 5.000000
-      scanningAudio: !<reference.AudioComponent> 00000000-0000-0000-0000-000000000000
   ScriptTypes:
     -
       {}
   InputLines:
     - '// @input Component.RenderMeshVisual meshVisual {"hint":"The RenderMeshVisual containing the World Mesh"}'
     - '// @input float scanDuration = 5 {"hint":"Duration of the scan in seconds"}'
-    - '// @input Component.AudioComponent scanningAudio {"hint":"Looping sound during scan"}'

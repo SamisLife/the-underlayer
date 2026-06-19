@@ -36,6 +36,10 @@ export const MOCK_DEVICES: Device[] = [
       highCount: 0,
       mediumCount: 1458,
       packageCount: 81,
+      sourceCounts: {
+        "apt": 1161,
+        "python": 297
+      },
       findings: [
         {package: "chromium",  cve_count: 1000, severity: "medium", source: "apt"},
         {package: "binutils",  cve_count: 92,   severity: "medium", source: "apt"},
@@ -71,6 +75,9 @@ export const MOCK_DEVICES: Device[] = [
       highCount: 0,
       mediumCount: 12,
       packageCount: 4,
+      sourceCounts: {
+        "apt": 12
+      },
       findings: [
         {package: "dnsmasq",  cve_count: 8, severity: "medium", source: "apt"},
         {package: "busybox",  cve_count: 4, severity: "low",    source: "apt"},
@@ -86,9 +93,10 @@ export const MOCK_DEVICES: Device[] = [
     lastSeen: "2026-06-10T01:55:12Z",
     ar_summary: {
       hostname: "10.0.0.47",
+      deviceType: "phone",
       ip: "10.0.0.47",
-      os: "Unknown",
-      hardware: {cpu: "Unknown", cores: 0, ram_gb: 0},
+      os: "iOS 17.4",
+      hardware: {cpu: "A16 Bionic", cores: 6, ram_gb: 6},
       users: [],
       openPorts: [
         {port: 8883, service: "mqtt", risk: "high", note: "Unencrypted IoT broker"},
@@ -105,3 +113,78 @@ export const MOCK_DEVICES: Device[] = [
     },
   },
 ]
+
+export const MOCK_PROBLEMS: Record<string, any[]> = {
+  "10.0.0.131": [
+    {
+      priority: "high",
+      description: "Exposed unencrypted HTTP service on port 8080.",
+      fixCommand: "ufw deny 8080/tcp",
+      fixLabel: "Block Port 8080"
+    },
+    {
+      priority: "high",
+      description: "Node.js service is running as root.",
+      fixCommand: "killall node && su - sami -c 'node server.js'",
+      fixLabel: "Demote Node"
+    },
+    {
+      priority: "high",
+      description: "Apache2 has 37 unpatched high-severity CVEs.",
+      fixCommand: "apt-get install --only-upgrade apache2",
+      fixLabel: "Patch Apache2"
+    },
+    {
+      priority: "medium",
+      description: "Unused avahi-daemon is exposing mDNS network info.",
+      fixCommand: "systemctl disable avahi-daemon && systemctl stop avahi-daemon",
+      fixLabel: "Disable Avahi"
+    },
+    {
+      priority: "medium",
+      description: "Outdated chromium package with 1000 known CVEs.",
+      fixCommand: "apt-get install --only-upgrade chromium",
+      fixLabel: "Upgrade Chromium"
+    },
+    {
+      priority: "medium",
+      description: "Outdated binutils package with 92 CVEs.",
+      fixCommand: "apt-get install --only-upgrade binutils",
+      fixLabel: "Upgrade Binutils"
+    }
+  ],
+  "10.0.0.1": [
+    {
+      priority: "critical",
+      description: "Router is using default administrative password.",
+      fixCommand: "passwd root",
+      fixLabel: "Change Password"
+    },
+    {
+      priority: "medium",
+      description: "Default admin panel exposed on port 80.",
+      fixCommand: "uci set uhttpd.main.redirect_https='1' && uci commit uhttpd && /etc/init.d/uhttpd restart",
+      fixLabel: "Force HTTPS"
+    },
+    {
+      priority: "medium",
+      description: "dnsmasq vulnerable to cache poisoning (8 CVEs).",
+      fixCommand: "opkg update && opkg upgrade dnsmasq",
+      fixLabel: "Patch Dnsmasq"
+    },
+    {
+      priority: "low",
+      description: "busybox contains minor privilege escalation flaws.",
+      fixCommand: "opkg update && opkg upgrade busybox",
+      fixLabel: "Upgrade Busybox"
+    }
+  ],
+  "10.0.0.47": [
+    {
+      priority: "high",
+      description: "Unencrypted MQTT broker running on port 8883.",
+      fixCommand: "Disable MQTT service via iOS settings or MDM profile.",
+      fixLabel: "Disable MQTT"
+    }
+  ]
+}

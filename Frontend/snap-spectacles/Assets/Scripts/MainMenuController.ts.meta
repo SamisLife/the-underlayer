@@ -30,6 +30,8 @@
     clickAudio: false
     deviceListPanel: false
     esp32Prefab: false
+    scanningAudio: false
+    uiTogglePrefab: false
     worldScanner: false
   ScriptTypesHidden:
     {}
@@ -45,6 +47,8 @@
       worldScanner: !<reference.ScriptComponent> 00000000-0000-0000-0000-000000000000
       esp32Prefab: !<reference.ObjectPrefab> 00000000-0000-0000-0000-000000000000
       clickAudio: !<reference.AudioComponent> 00000000-0000-0000-0000-000000000000
+      uiTogglePrefab: !<reference.ObjectPrefab> 00000000-0000-0000-0000-000000000000
+      scanningAudio: !<reference.AudioComponent> 00000000-0000-0000-0000-000000000000
   ScriptTypes:
     -
       {}
@@ -54,3 +58,5 @@
     - '// @input Component.ScriptComponent worldScanner {"hint":"Optional: Reference to the WorldScannerEffect component"}'
     - '// @input Asset.ObjectPrefab esp32Prefab {"hint":"ESP32 Hologram Prefab"}'
     - '// @input Component.AudioComponent clickAudio {"hint":"Sound for clicking buttons"}'
+    - '// @input Asset.ObjectPrefab uiTogglePrefab {"hint":"Snap UI Toggle Prefab for Demo Mode"}'
+    - '// @input Component.AudioComponent scanningAudio {"hint":"Looping sound during scan"}'

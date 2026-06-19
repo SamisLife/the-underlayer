@@ -1,0 +1,144 @@
+- !<AssetImportMetadata/569bae53-28b3-49de-99fa-a93bac0af71d>
+  ImportedAssetIds:
+    ObjectPrefab: !<reference> 67e7fce8-d2c2-4f20-944c-7967d7cd38fb
+  ImporterName: ObjectPrefabImporter
+  PrimaryAsset: !<reference> 67e7fce8-d2c2-4f20-944c-7967d7cd38fb
+  PackageType: NotAPackage
+  LegacyPackagePolicy: ~
+  ExtraData:
+    {}
+  AssetDataMap:
+    ObjectPrefab: !<own> 60491357-e73d-452b-ac66-9d2eaa92c0e0
+  DependentFiles:
+    []
+  ImporterSettings: !<AssetImporterSettings>
+    {}
+  CompressionSettings: !<own> 00000000-0000-0000-0000-000000000000
+- !<ScriptComponent/238f18f6-a677-4a07-6003-9ecd71cfed1c>
+  PrefabRemaps:
+    []
+  Name: UI Toggle
+  Enabled: true
+  ScriptAsset: !<reference> 598dbe74-c108-4405-b8c8-e57c8f604db7
+  ScriptInputsDefault:
+    interactable: true
+    editProperties: true
+    startEndpoint: true
+    endEndpoint: true
+    useColors: true
+    toggleOffColor: true
+    disabledColor: true
+    useTextures: true
+    toggleOnTexture: true
+    toggleOffTexture: true
+    disabledTexture: true
+    editEventCallbacks: true
+    callbackType: true
+    onToggleOffBehaviors: true
+    onToggleOnBehaviors: true
+    onToggleBehaviors: true
+    onToggleOffGlobalBehaviors: true
+    onToggleOnGlobalBehaviors: true
+    onToggleGlobalBehaviors: true
+    customFunctionScript: true
+    onToggleOffFunctionNames: true
+    onToggleOnFunctionNames: true
+    onToggleFunctionNames: true
+    editConnections: true
+    backgroundPrefab: true
+    buttonPrefab: true
+    toggleTouchEvent: true
+    editDebugSettings: true
+    printDebugStatements: true
+    printWarningStatements: true
+    disableTouchEventsInput: true
+  ScriptTypesDefault:
+    {}
+  ScriptInputs:
+    "":
+      interactable: true
+      renderOrderOverride: 2
+      initialToggleValue: true
+      editProperties: false
+      startEndpoint: -0.400000
+      endEndpoint: 0.400000
+      useColors: true
+      toggleOnColor: !<Vec4> {x: 0.000000, y: 0.411765, z: 0.913725, w: 1.000000}
+      toggleOffColor: !<Vec4> {x: 0.574151, y: 0.574166, z: 0.574151, w: 1.000000}
+      disabledColor: !<Vec4> {x: 0.574151, y: 0.574166, z: 0.574151, w: 1.000000}
+      useTextures: false
+      toggleOnTexture: !<reference.Texture> 00000000-0000-0000-0000-000000000000
+      toggleOffTexture: !<reference.Texture> 00000000-0000-0000-0000-000000000000
+      disabledTexture: !<reference.Texture> 00000000-0000-0000-0000-000000000000
+      editEventCallbacks: false
+      callbackType: 0
+      onToggleOffBehaviors: !<reference.ScriptComponent[]>
+        []
+      onToggleOnBehaviors: !<reference.ScriptComponent[]>
+        []
+      onToggleBehaviors: !<reference.ScriptComponent[]>
+        []
+      onToggleOffGlobalBehaviors: !<string[]>
+        []
+      onToggleOnGlobalBehaviors: !<string[]>
+        []
+      onToggleGlobalBehaviors: !<string[]>
+        []
+      customFunctionScript: !<reference.ScriptComponent> 00000000-0000-0000-0000-000000000000
+      onToggleOffFunctionNames: !<string[]>
+        []
+      onToggleOnFunctionNames: !<string[]>
+        []
+      onToggleFunctionNames: !<string[]>
+        []
+      editConnections: false
+      backgroundPrefab: !<reference.ObjectPrefab> b31312d8-4d99-4068-a42d-74ac1f876f82
+      buttonPrefab: !<reference.ObjectPrefab> 2cfeeb3f-6618-464f-8895-f1bb0639e70e
+      toggleTouchEvent: TouchStartEvent
+      editDebugSettings: false
+      printDebugStatements: false
+      printWarningStatements: false
+      disableTouchEventsInput: false
+  ScriptTypes:
+    "":
+      {}
+- !<SceneObject/4574ae0b-d473-428e-756b-85b247a6bc0c>
+  PrefabRemaps:
+    []
+  Name: UI Toggle
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 238f18f6-a677-4a07-6003-9ecd71cfed1c
+    - !<own> 5c6fc231-36ce-45e5-56bd-1b6002b3079b
+- !<Image/5c6fc231-36ce-45e5-56bd-1b6002b3079b>
+  PrefabRemaps:
+    []
+  Name: Image
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Fit
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 878a43fb-b238-4ee5-9c4e-57f8056e2cb0
+  FlipX: false
+  FlipY: false
+  RotationAngle: 0
+  Pivot: {x: 0.000000, y: 0.000000}
+  ExtentsTarget: !<reference> 00000000-0000-0000-0000-000000000000
+- !<ObjectPrefabAssetData/60491357-e73d-452b-ac66-9d2eaa92c0e0>
+  Prototype: !<ObjectOwner/18e2de76-2478-4e5a-a6e7-fa9adee7c8ec>
+    PackagePath: ""
+    objects:
+      - !<own> 4574ae0b-d473-428e-756b-85b247a6bc0c
