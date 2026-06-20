@@ -2,7 +2,9 @@ import {RectangleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/R
 import {RoundedRectangleVisual} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangleVisual"
 import {Interactable} from "SpectaclesInteractionKit.lspkg/Components/Interaction/Interactable/Interactable"
 import {TargetingMode} from "SpectaclesInteractionKit.lspkg/Core/Interactor/Interactor"
-import {DeviceListPanel, makeObject, makePlate, makeText, C_CYAN, C_DIM, C_WHITE, FS_TITLE, FS_SMALL} from "./DeviceListPanel"
+import {DeviceListPanel} from "./DeviceListPanel"
+import {makeObject, makePlate, makeText} from "./UI/UiBuilders"
+import {C_CYAN, C_DIM, C_WHITE, FS_TITLE, FS_SMALL} from "./UI/Theme"
 import {DemoState} from "./Data/DeviceTypes"
 import {lerp} from "SpectaclesInteractionKit.lspkg/Utils/mathUtils"
 
@@ -376,6 +378,17 @@ export class MainMenuController extends BaseScriptComponent {
     if (this.clickAudio) {
       this.clickAudio.play(1);
     }
+
+    // Own the looping scan sound here, tied to the SCAN state, so it reliably starts and stops
+    // even though WorldScannerEffect may sit on a disabled object whose timers never fire.
+    if (this.scanningAudio) {
+      if (newState === "SCAN") {
+        this.scanningAudio.play(-1)
+      } else {
+        this.scanningAudio.stop(false)
+      }
+    }
+
     this.state = newState
 
     this.minimizedBtnRoot.enabled = (newState === "MINIMIZED" || newState === "EXPANDED")
@@ -399,7 +412,6 @@ export class MainMenuController extends BaseScriptComponent {
       if (this.worldScanner) {
         const scanner = this.worldScanner as unknown as any
         if (typeof scanner.triggerScan === "function") {
-          scanner.scanningAudio = this.scanningAudio
           scanner.triggerScan()
         }
       }

@@ -1,24 +1,19 @@
 import {RectangleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/RectangleButton"
-import {RoundedRectangle} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangle"
 import {RoundedRectangleVisual} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangleVisual"
 import {Interactable} from "SpectaclesInteractionKit.lspkg/Components/Interaction/Interactable/Interactable"
 import {TargetingMode} from "SpectaclesInteractionKit.lspkg/Core/Interactor/Interactor"
-import {Device, DemoState} from "./Data/DeviceTypes"
+import {Device} from "./Data/DeviceTypes"
+import {DeviceDataSourceProvider} from "./Services/DeviceDataSourceProvider"
 import {
   C_CYAN,
-  C_DIM,
   C_WHITE,
   FS_TITLE,
   FS_BODY,
   FS_SMALL,
   FS_TINY,
-  threatColor,
-  threatLabel,
-  makeObject,
-  makeText,
-  makePlate,
-  normalizeDevice
-} from "./DeviceListPanel"
+  threatColor
+} from "./UI/Theme"
+import {makeObject, makeText, makePlate} from "./UI/UiBuilders"
 
 export class DeviceDetailPanel {
   private panelRoot: SceneObject
@@ -26,7 +21,13 @@ export class DeviceDetailPanel {
   private uiRoot: SceneObject
   private uiScaledRoot: SceneObject | null = null
   private indicatorBaseY: number = 15.0
-  private internetModule: any = require("LensStudio:InternetModule")
+  private dataSource = DeviceDataSourceProvider.getInstance()
+
+  // Lifecycle guard so async (network/demo-delay) callbacks no-op after the panel is destroyed.
+  private isDestroyed: boolean = false
+  // Captured so the per-frame UpdateEvent can be removed on destroy (previously leaked).
+  private updateScript?: ScriptComponent
+  private updateEvent?: UpdateEvent
 
   constructor(
     parentRoot: SceneObject,
@@ -141,9 +142,9 @@ export class DeviceDetailPanel {
     analyzeBtn.initialize()
     this.configureBtn(analyzeBtn, new vec4(0, 0, 0, 0.8), () => this.triggerAnalysis(analyzeBtn, analyzeBtnRoot))
 
-    const script = this.panelRoot.createComponent("Component.ScriptComponent") as ScriptComponent
-    const updateEvent = script.createEvent("UpdateEvent") as UpdateEvent
-    updateEvent.bind(() => this.onUpdate())
+    this.updateScript = this.panelRoot.createComponent("Component.ScriptComponent") as ScriptComponent
+    this.updateEvent = this.updateScript.createEvent("UpdateEvent") as UpdateEvent
+    this.updateEvent.bind(() => this.onUpdate())
 
     this.setExpanded(false)
   }
@@ -544,11 +545,11 @@ export class DeviceDetailPanel {
   }
 
   private triggerAnalysis(btn: RectangleButton, root: SceneObject): void {
-    if (!this.apiUrlBase && !DemoState.isDemoMode) return
+    if (!this.apiUrlBase && this.dataSource.isLive) return
     btn.enabled = false
     const txt = root.getChild(0).getComponent("Component.Text") as Text
     if (txt) txt.text = "ANALYZING..."
-    
+
     this.isAnalyzing = true
     this.analysisStartTime = getTime()
     this.analysisCompleted = false
@@ -557,58 +558,23 @@ export class DeviceDetailPanel {
       this.analyzeAudio.play(1)
     }
 
-    if (DemoState.isDemoMode) {
-      const delay = root.createComponent("Component.ScriptComponent") as ScriptComponent
-      const ev = delay.createEvent("DelayedCallbackEvent") as DelayedCallbackEvent
-      ev.bind(() => {
-        if (this.analyzeAudio) this.analyzeAudio.stop(false)
-        this.analysisCompleted = true
-        if (txt) txt.text = "ANALYSIS COMPLETE"
-        btn.enabled = true
-        
-        // Dynamically inject the mock problems to simulate a completed analysis finding new issues!
-        const MOCK_PROBLEMS = require("./Data/MockDevices").MOCK_PROBLEMS
-        if (MOCK_PROBLEMS && MOCK_PROBLEMS[this.device.hostname]) {
-            if (!this.device.ar_summary) this.device.ar_summary = {} as any
-            this.device.ar_summary.problems = MOCK_PROBLEMS[this.device.hostname]
-            
-            // Force the UI to rebuild and render the newly discovered Action Items
-            this.updateDeviceData(this.device)
-        }
-      })
-      ev.reset(5.0)
-      return
-    }
-
-    try {
-      const request = RemoteServiceHttpRequest.create()
-      request.url = `${this.apiUrlBase}/api/analyze/${this.device.hostname}`
-      request.method = RemoteServiceHttpRequest.HttpRequestMethod.Post
-      
-      this.internetModule.performHttpRequest(request, (response: RemoteServiceHttpResponse) => {
-        if (this.analyzeAudio) this.analyzeAudio.stop(false)
-        this.analysisCompleted = true
-        if (response.statusCode === 200) {
-          if (txt) txt.text = "ANALYSIS COMPLETE"
-          try {
-            const data = JSON.parse(response.body)
-            if (data.arSummary) {
-              this.updateDeviceData(normalizeDevice(data.arSummary))
-            }
-          } catch(e) {
-            print(`Failed to parse updated device: ${e}`)
-          }
-        } else {
-          if (txt) txt.text = "ANALYSIS FAILED"
-        }
-        btn.enabled = true
-      })
-    } catch (e) {
+    this.dataSource.analyze(this.device).then((result) => {
+      if (this.isDestroyed) return
       if (this.analyzeAudio) this.analyzeAudio.stop(false)
-      if (txt) txt.text = "ERROR"
-      btn.enabled = true
       this.analysisCompleted = true
-    }
+      btn.enabled = true
+
+      if (!result.ok) {
+        if (txt) txt.text = result.reason === "failed" ? "ANALYSIS FAILED" : "ERROR"
+        return
+      }
+
+      if (txt) txt.text = "ANALYSIS COMPLETE"
+      if (result.device) {
+        // Force the UI to rebuild and render the newly discovered Action Items
+        this.updateDeviceData(result.device)
+      }
+    })
   }
 
   private showFixPopup(problem: any): void {
@@ -684,60 +650,40 @@ export class DeviceDetailPanel {
       approveBtn.enabled = false
       const txt = approveBtnRoot.getChild(0).getComponent("Component.Text") as Text
       if (txt) txt.text = "EXECUTING..."
-      
-      if (DemoState.isDemoMode) {
-        const delay = popupRoot.createComponent("Component.ScriptComponent") as ScriptComponent
-        const ev = delay.createEvent("DelayedCallbackEvent") as DelayedCallbackEvent
-        ev.bind(() => {
-          if (txt) txt.text = "SUCCESS"
-          const delay2 = popupRoot.createComponent("Component.ScriptComponent") as ScriptComponent
-          const closeEv = delay2.createEvent("DelayedCallbackEvent") as DelayedCallbackEvent
-          closeEv.bind(closePopup)
-          closeEv.reset(1.0)
-        })
-        ev.reset(2.0)
-        return
-      }
 
-      try {
-        const request = RemoteServiceHttpRequest.create()
-        request.url = `${this.apiUrlBase}/api/approve-action`
-        request.method = RemoteServiceHttpRequest.HttpRequestMethod.Post
-        request.setHeader("Content-Type", "application/json")
-        request.body = JSON.stringify({
-          hostname: this.device.hostname,
-          actionLabel: problem.fixLabel || "FIX",
-          command: problem.fixCommand,
-          approved: true
-        })
-        
-        this.internetModule.performHttpRequest(request, (response: RemoteServiceHttpResponse) => {
-          if (response.statusCode === 200) {
-            if (txt) txt.text = "SUCCESS"
-            const delayed = popupRoot.createComponent("Component.ScriptComponent") as ScriptComponent
-            const evt = delayed.createEvent("DelayedCallbackEvent") as DelayedCallbackEvent
-            evt.bind(() => {
-              // Delete the problem locally
-              if (this.device.ar_summary && this.device.ar_summary.problems) {
-                const idx = this.device.ar_summary.problems.indexOf(problem)
-                if (idx > -1) {
-                  this.device.ar_summary.problems.splice(idx, 1)
-                }
+      this.dataSource.approveAction({
+        hostname: this.device.hostname,
+        actionLabel: problem.fixLabel || "FIX",
+        command: problem.fixCommand
+      }).then((result) => {
+        if (this.isDestroyed) return
+
+        if (!result.ok) {
+          if (txt) txt.text = result.reason === "failed" ? "FAILED" : "ERROR"
+          approveBtn.enabled = true
+          return
+        }
+
+        if (txt) txt.text = "SUCCESS"
+
+        if (this.dataSource.isLive) {
+          // Live: after a beat, remove the problem locally and slide the next one up.
+          this.delayOn(popupRoot, 2.0, () => {
+            if (this.device.ar_summary && this.device.ar_summary.problems) {
+              const idx = this.device.ar_summary.problems.indexOf(problem)
+              if (idx > -1) {
+                this.device.ar_summary.problems.splice(idx, 1)
               }
-              closePopup()
-              // Refresh device to visually slide up the next problem
-              this.updateDeviceData(this.device)
-            })
-            evt.reset(2.0)
-          } else {
-            if (txt) txt.text = "FAILED"
-            approveBtn.enabled = true
-          }
-        })
-      } catch (e) {
-        if (txt) txt.text = "ERROR"
-        approveBtn.enabled = true
-      }
+            }
+            closePopup()
+            // Refresh device to visually slide up the next problem
+            this.updateDeviceData(this.device)
+          })
+        } else {
+          // Demo: show SUCCESS briefly, then close (no local mutation).
+          this.delayOn(popupRoot, 1.0, closePopup)
+        }
+      })
     })
   }
 
@@ -805,49 +751,15 @@ export class DeviceDetailPanel {
       if (this.uiRoot) this.uiRoot.enabled = true;
     });
 
-    if (!this.apiUrlBase && !DemoState.isDemoMode) {
+    if (!this.apiUrlBase && this.dataSource.isLive) {
       bodyTxt.text = "OFFLINE MODE";
       return;
     }
 
-    if (DemoState.isDemoMode) {
-      const delay = uiNode.createComponent("Component.ScriptComponent") as ScriptComponent
-      const ev = delay.createEvent("DelayedCallbackEvent") as DelayedCallbackEvent
-      ev.bind(() => {
-        bodyTxt.text = "This is a simulated AI explanation for demo mode.\n\n" +
-                       `You requested info about: ${topic}\n` +
-                       "In a real environment, this data is fetched from the Underlayer backend using an LLM to explain the vulnerability or open port in context.\n\n" +
-                       "Risk has been flagged as moderate. Proceed with caution."
-      })
-      ev.reset(2.0)
-      return
-    }
-
-    try {
-      const request = RemoteServiceHttpRequest.create();
-      request.url = `${this.apiUrlBase}/api/learn`;
-      request.method = RemoteServiceHttpRequest.HttpRequestMethod.Post;
-      request.setHeader("Content-Type", "application/json");
-      request.body = JSON.stringify({
-        topic: topic,
-        context: contextStr || ""
-      });
-
-      this.internetModule.performHttpRequest(request, (response: RemoteServiceHttpResponse) => {
-        if (response.statusCode === 200) {
-          try {
-            const data = JSON.parse(response.body);
-            bodyTxt.text = data.info || "No explanation returned.";
-          } catch (e) {
-            bodyTxt.text = `PARSE ERROR: ${response.body}`;
-          }
-        } else {
-          bodyTxt.text = `API ERROR: ${response.statusCode}\n${response.body}`;
-        }
-      });
-    } catch (e) {
-      bodyTxt.text = "NETWORK EXCEPTION";
-    }
+    this.dataSource.learn(topic, contextStr || "").then((info) => {
+      if (this.isDestroyed) return;
+      bodyTxt.text = info;
+    });
   }
 
   private makeLine(parent: SceneObject, name: string, start: vec3, end: vec3, thickness: number, color: vec4): void {
@@ -918,6 +830,15 @@ export class DeviceDetailPanel {
     return new vec3(x, y, z)
   }
 
+  /** Run a callback after `seconds`, hosted on the given SceneObject so it is cleaned up when
+   *  that object is destroyed (e.g. closing a popup cancels its pending delays). */
+  private delayOn(host: SceneObject, seconds: number, cb: () => void): void {
+    const script = host.createComponent("Component.ScriptComponent") as ScriptComponent
+    const ev = script.createEvent("DelayedCallbackEvent") as DelayedCallbackEvent
+    ev.bind(cb)
+    ev.reset(seconds)
+  }
+
   private configureBtn(btn: RectangleButton, defaultColor: vec4, tapCallback: () => void): void {
     btn.onTriggerUp.add(() => {
       if (this.selectAudio) this.selectAudio.play(1)
@@ -938,7 +859,7 @@ export class DeviceDetailPanel {
     if (this.uiRoot) this.uiRoot.enabled = expanded
 
     // If closing monitors in Demo Mode, wipe the mock problems and rebuild the UI
-    if (!expanded && DemoState.isDemoMode && this.device?.ar_summary?.problems) {
+    if (!expanded && !this.dataSource.isLive && this.device?.ar_summary?.problems) {
       this.device.ar_summary.problems = []
       this.updateDeviceData(this.device)
     }
@@ -1038,8 +959,15 @@ export class DeviceDetailPanel {
   }
 
   public destroy(): void {
+    this.isDestroyed = true
+
+    // Stop the per-frame update loop so it can't fire on a destroyed panel.
+    if (this.updateScript && this.updateEvent) {
+      this.updateScript.removeEvent(this.updateEvent)
+    }
+
     // Hide problems again when the monitor is closed in Demo Mode
-    if (DemoState.isDemoMode && this.device?.ar_summary?.problems) {
+    if (!this.dataSource.isLive && this.device?.ar_summary?.problems) {
       this.device.ar_summary.problems = []
     }
 

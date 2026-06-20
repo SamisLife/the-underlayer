@@ -1,5 +1,6 @@
 import {Device} from "./Data/DeviceTypes"
-import {makeText, C_CYAN, C_WHITE, FS_SMALL} from "./DeviceListPanel"
+import {makeText} from "./UI/UiBuilders"
+import {C_CYAN, C_WHITE, FS_SMALL} from "./UI/Theme"
 import {RectangleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/RectangleButton"
 import {RoundedRectangleVisual} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangleVisual"
 

@@ -1,10 +1,47 @@
-- !<ObjectPrefab/67e7fce8-d2c2-4f20-944c-7967d7cd38fb>
+- !<ObjectPrefab/3102fe88-6655-4dbb-bfdc-112c94ec59e4>
   PackagePath: ""
   objects:
-    - !<own> 4574ae0b-d473-428e-8a94-7a4db85943f3
+    - !<own> 0531bc0e-1656-4557-bc7b-60db00180c07
   LazyLoading: false
   RetainAssets: true
-- !<ScriptComponent/238f18f6-a677-4a07-9ffc-61328e3012e3>
+- !<SceneObject/0531bc0e-1656-4557-bc7b-60db00180c07>
+  PrefabRemaps:
+    - 0531bc0e-1656-4557-bc7b-60db00180c07: 0531bc0e-1656-4557-4384-9f24ffe7f3f8
+    - 31bdf135-6810-40c8-bdd2-a3348a0e8229: 31bdf135-6810-40c8-422d-5ccb75f17dd6
+    - a7a15347-a1b5-4952-a22d-ba608949b7cf: a7a15347-a1b5-4952-5dd2-459f76b64830
+  Name: UI Toggle
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> a7a15347-a1b5-4952-a22d-ba608949b7cf
+    - !<own> 31bdf135-6810-40c8-bdd2-a3348a0e8229
+- !<Image/31bdf135-6810-40c8-bdd2-a3348a0e8229>
+  PrefabRemaps:
+    []
+  Name: Image
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Fit
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 878a43fb-b238-4ee5-9c4e-57f8056e2cb0
+  FlipX: false
+  FlipY: false
+  RotationAngle: 0
+  Pivot: {x: 0.000000, y: 0.000000}
+  ExtentsTarget: !<reference> 00000000-0000-0000-0000-000000000000
+- !<ScriptComponent/a7a15347-a1b5-4952-a22d-ba608949b7cf>
   PrefabRemaps:
     []
   Name: UI Toggle
@@ -92,40 +129,3 @@
   ScriptTypes:
     "":
       {}
-- !<SceneObject/4574ae0b-d473-428e-8a94-7a4db85943f3>
-  PrefabRemaps:
-    - 238f18f6-a677-4a07-9ffc-61328e3012e3: 238f18f6-a677-4a07-6003-9ecd71cfed1c
-    - 4574ae0b-d473-428e-8a94-7a4db85943f3: 4574ae0b-d473-428e-756b-85b247a6bc0c
-    - 5c6fc231-36ce-45e5-a942-e49ffd4cf864: 5c6fc231-36ce-45e5-56bd-1b6002b3079b
-  Name: UI Toggle
-  Enabled: true
-  Layers: 1
-  LocalTransform: !<TransformEntity>
-    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
-    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
-    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
-    HasSegmentScaleCompensation: false
-  Children:
-    []
-  Components:
-    - !<own> 238f18f6-a677-4a07-9ffc-61328e3012e3
-    - !<own> 5c6fc231-36ce-45e5-a942-e49ffd4cf864
-- !<Image/5c6fc231-36ce-45e5-a942-e49ffd4cf864>
-  PrefabRemaps:
-    []
-  Name: Image
-  Enabled: true
-  RenderOrder: 0
-  StretchMode: Fit
-  VerticalAlignment: Center
-  HorizontalAlignment: Center
-  MeshShadowMode: None
-  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
-  ShadowDensity: 1.000000
-  Materials:
-    - !<reference> 878a43fb-b238-4ee5-9c4e-57f8056e2cb0
-  FlipX: false
-  FlipY: false
-  RotationAngle: 0
-  Pivot: {x: 0.000000, y: 0.000000}
-  ExtentsTarget: !<reference> 00000000-0000-0000-0000-000000000000

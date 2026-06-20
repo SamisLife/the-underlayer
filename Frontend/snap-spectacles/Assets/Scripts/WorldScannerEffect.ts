@@ -8,8 +8,6 @@ export class WorldScannerEffect extends BaseScriptComponent {
   @hint("Duration of the scan in seconds")
   scanDuration: number = 5.0
 
-  public scanningAudio?: AudioComponent
-
   private material: Material
 
   onAwake(): void {
@@ -22,42 +20,37 @@ export class WorldScannerEffect extends BaseScriptComponent {
   }
 
   public triggerScan(): void {
+    // Mesh visual only. The scanning sound is owned by MainMenuController (tied to the SCAN
+    // state) because this component may live on a disabled object whose timers never fire.
     if (!this.meshVisual || !this.material) {
       print("WorldScannerEffect: Missing meshVisual or material!")
       return
-    }
-
-    if (this.scanningAudio) {
-      this.scanningAudio.play(-1) // Loop endlessly while scanning
     }
 
     let t = 0
     const updateEvent = this.createEvent("UpdateEvent") as UpdateEvent
     updateEvent.bind(() => {
       t += getDeltaTime()
-      
+
       let alpha = 0
       // 1-second fade in
       if (t < 1.0) {
-        alpha = t 
-      } 
+        alpha = t
+      }
       // Hold max alpha during scan
       else if (t < this.scanDuration - 1.0) {
-        alpha = 1.0 
-      } 
+        alpha = 1.0
+      }
       // 1-second fade out
       else if (t < this.scanDuration) {
-        alpha = this.scanDuration - t 
-      } 
+        alpha = this.scanDuration - t
+      }
       // Done scanning
       else {
         alpha = 0
         this.removeEvent(updateEvent)
-        if (this.scanningAudio) {
-          this.scanningAudio.stop(false)
-        }
       }
-      
+
       this.setAlpha(alpha)
     })
   }
