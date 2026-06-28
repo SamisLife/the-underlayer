@@ -72,37 +72,46 @@ def build_findings(scan: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def build_ar_summary(scan: Dict[str, Any]) -> Dict[str, Any]:
+    """Build the ar_summary the lens consumes.
+
+    Field names match the lens's DeviceSummary type (Frontend DeviceTypes.ts) 1:1 — this
+    is the canonical contract. ingest_scan fills the CVE-derived fields (cveCount, counts,
+    sourceCounts, vulnerabilityMatches) when an OSV lookup finds matches; the zero/empty
+    defaults here keep the shape complete even with no findings.
+    """
     hostname = scan.get("hostname")
     os_info = scan.get("os") or {}
+    hardware = scan.get("hardware") or {}
     network = scan.get("network") or {}
-    security_updates = scan.get("security_updates") or {}
 
-    severity = calculate_severity(scan)
+    threat_level = calculate_severity(scan)
     findings = build_findings(scan)
 
     return {
         "deviceId": scan.get("device_id") or hostname,
         "hostname": hostname,
-        "mac": scan.get("mac"),
-        "ip": scan.get("ip"),
-        "label": hostname,
+        "bt_name": scan.get("bt_name"),
         "deviceType": scan.get("device_type") or "Unknown",
-        "position": scan.get("position"),
+        "ip": scan.get("ip") or hostname,
+        "scannedAt": datetime.now(timezone.utc).isoformat(),
         "os": os_info.get("pretty_name") or os_info.get("name") or "Unknown",
-        "osVersion": os_info.get("version") or "",
         "kernel": os_info.get("kernel"),
-        "severity": severity,
-        "statusColor": {
-            "critical": "red",
-            "high": "red",
-            "medium": "amber",
-            "low": "green",
-        }.get(severity, "gray"),
+        "hardware": {
+            "cpu": hardware.get("cpu_model") or "Unknown",
+            "cores": hardware.get("cpu_cores") or 0,
+            "ram_gb": round((hardware.get("memory_mb") or 0) / 1024, 1),
+        },
+        "users": [u.get("username") for u in (scan.get("users") or []) if u.get("username")],
         "openPorts": network.get("open_ports") or [],
-        "securityUpdatesAvailable": security_updates.get("security_updates_available", 0),
+        "summary": f"{hostname} — {threat_level} risk.",
+        "threatLevel": threat_level,
+        "cveCount": 0,
+        "criticalCount": 0,
+        "highCount": 0,
+        "mediumCount": 0,
+        "packageCount": 0,
         "findings": findings,
-        "vulns": len(findings),  # Baseline vulns, updated if CVEs are found
-        "summary": f"{hostname} — {severity} risk.",
-        "lastScanned": datetime.now(timezone.utc).isoformat(),
-        "scanMetadata": scan.get("scan_metadata") or {}
+        "sourceCounts": {},
+        "vulnerabilityMatches": [],
+        "scanMetadata": scan.get("scan_metadata") or {},
     }

@@ -3,6 +3,10 @@
  * Pure data-normalization helpers extracted from DeviceListPanel.ts. Converts loosely-typed
  * backend / mock payloads into the strict Device shape and classifies device types. No scene,
  * UI, or networking concerns live here.
+ *
+ * The backend now emits the DeviceSummary field names directly (see DeviceTypes.ts), so this
+ * is a defensive normalizer — it supplies defaults for mock/partial payloads. The legacy
+ * fallbacks (e.g. threatLevel || severity) are kept only to tolerate older cached data.
  */
 
 import {Device, ThreatLevel} from "./DeviceTypes"

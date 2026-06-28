@@ -22,7 +22,7 @@ def log_scan_summary(scan_dict: Dict[str, Any], ar_summary: Dict[str, Any], scan
     network   = scan_dict.get("network") or {}
     ports     = network.get("open_ports") or []
     sec_upd   = scan_dict.get("security_updates") or {}
-    severity  = ar_summary.get("severity", "unknown")
+    severity  = ar_summary.get("threatLevel", "unknown")
     findings  = ar_summary.get("findings") or []
     apt_pkgs  = scan_dict.get("apt_packages") or []
     services  = scan_dict.get("services") or []
@@ -114,7 +114,7 @@ def save_report(hostname: str, ts: datetime, ar_summary: dict, vuln_hits: list) 
         report = {
             "hostname":    hostname,
             "scannedAt":   ts.isoformat(),
-            "severity":    ar_summary.get("severity"),
+            "severity":    ar_summary.get("threatLevel"),
             "os":          ar_summary.get("os"),
             "openPorts":   ar_summary.get("openPorts", []),
             "findings":    ar_summary.get("findings", []),

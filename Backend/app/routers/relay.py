@@ -94,14 +94,11 @@ async def ingest_scan_document(scan: DeviceScan) -> dict:
                            for h in vuln_hits]
             ar_summary["vulnerabilityMatches"] = stored_hits
 
-            # Escalate severity if any CVE is worse than the heuristic result
+            # Escalate threat level if any CVE is worse than the heuristic result
             cve_max  = max(_sev_rank.get(v["severity"], 0) for v in vuln_hits)
-            cur_rank = _sev_rank.get(ar_summary.get("severity", "low"), 0)
+            cur_rank = _sev_rank.get(ar_summary.get("threatLevel", "low"), 0)
             if cve_max > cur_rank:
-                new_sev = ["low", "medium", "high", "critical"][cve_max]
-                ar_summary["severity"]    = new_sev
-                ar_summary["statusColor"] = {"critical": "red", "high": "red",
-                                              "medium": "amber", "low": "green"}.get(new_sev, "gray")
+                ar_summary["threatLevel"] = ["low", "medium", "high", "critical"][cve_max]
 
             # Group findings by package — one card line per affected package, not per CVE
             pkg_groups: dict = {}
@@ -133,19 +130,20 @@ async def ingest_scan_document(scan: DeviceScan) -> dict:
             # Dynamic summary — reflects actual CVE count, not heuristic
             n_cve = len(vuln_hits)
             n_pkg = len(pkg_groups)
-            final_sev = ar_summary["severity"]
+            final_sev = ar_summary["threatLevel"]
             ar_summary["summary"] = (
                 f"{n_cve} CVE{'s' if n_cve > 1 else ''} across {n_pkg} "
                 f"package{'s' if n_pkg > 1 else ''} — {final_sev.upper()} risk"
             )
-            ar_summary["vulns"] = n_cve + len(ar_summary.get("findings", []))
+            ar_summary["cveCount"] = n_cve
+            ar_summary["packageCount"] = n_pkg
+            ar_summary["criticalCount"] = sum(1 for v in vuln_hits if v["severity"] == "critical")
+            ar_summary["highCount"] = sum(1 for v in vuln_hits if v["severity"] == "high")
+            ar_summary["mediumCount"] = sum(1 for v in vuln_hits if v["severity"] == "medium")
             ar_summary["sourceCounts"] = source_counts
         else:
-            ar_summary["vulnerabilityMatches"] = []
-            ar_summary["sourceCounts"] = {}
-            final_sev = ar_summary.get("severity", "low")
+            final_sev = ar_summary.get("threatLevel", "low")
             ar_summary["summary"] = f"{scan.hostname} — {final_sev} risk, no known CVEs"
-            ar_summary["vulns"] = len(ar_summary.get("findings", []))
 
         raw_doc = {
             "hostname": scan.hostname,

@@ -1,7 +1,10 @@
 /**
  * DeviceTypes.ts
- * Type definitions that mirror the FastAPI backend's ar_summary schema.
- * When wiring live data, the WebSocket payload should map 1:1 to these types.
+ * The canonical device contract. The backend's build_ar_summary (Backend/app/summary.py)
+ * emits the DeviceSummary fields below 1:1 — same names (threatLevel, scannedAt, cveCount,
+ * hardware, users, ...). Both the /api/devices/ar poll and the WebSocket device_updated
+ * payload use this shape. DeviceParser.normalizeDevice only applies defensive defaults for
+ * mock or partial payloads; it is no longer translating mismatched field names.
  */
 
 export type ThreatLevel = "critical" | "high" | "medium" | "low" | "unknown"
