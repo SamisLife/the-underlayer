@@ -79,7 +79,6 @@ async def ingest_scan_document(scan: DeviceScan) -> dict:
     try:
         log.info("Relay received  %s  (IP: %s  MAC: %s)", scan.hostname, scan.ip, scan.mac)
         scan_dict = scan.model_dump()
-        print(f"DEBUG INGEST: {scan_dict.get('hostname')} - BT_NAME: {scan_dict.get('bt_name')}")
         now = datetime.now(timezone.utc)
 
         ar_summary = build_ar_summary(scan_dict)
