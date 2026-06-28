@@ -24,8 +24,13 @@ SCAN_DIR.mkdir(exist_ok=True)
 REPORTS_DIR.mkdir(exist_ok=True)
 
 # ── AI inference (Google Gemini) ──────────────────────────────────────────────
-# Optional: without a key, /api/learn falls back to the offline knowledge base.
+# Optional: without a key, /api/learn falls back to the offline knowledge base and
+# /api/analyze falls back to the offline rule-based analyzer.
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+
+# Artificial delay (seconds) for the offline analyze fallback, so the AR "analyzing"
+# animation has time to play. Set to 0 to disable.
+OFFLINE_ANALYZE_DELAY = float(os.getenv("OFFLINE_ANALYZE_DELAY", "3.5"))
 
 # ── Server ────────────────────────────────────────────────────────────────────
 PORT = int(os.getenv("PORT", "8000"))

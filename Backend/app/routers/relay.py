@@ -3,6 +3,7 @@ remediation approval, topic explanation, ESP32 registration/trigger, and the
 WebSocket stream.
 """
 
+import asyncio
 import logging
 import textwrap
 from datetime import datetime, timezone
@@ -13,7 +14,9 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import run_in_threadpool
 
 from ..ai import analyze_with_ai, explain_topic
+from ..config import OFFLINE_ANALYZE_DELAY
 from ..models import ApprovalRequest, DeviceScan, LearnRequest, ScannerRegistration
+from ..offline_analysis import analyze_offline
 from ..osv import check_osv_vulnerabilities
 from ..reporting import log_scan_summary, save_report
 from ..ssh.commands import run_command_on_host
@@ -198,23 +201,23 @@ async def analyze_device(hostname: str):
     raw_scan = device.get("latestRawScan") or {}
     ar_summary = device.get("arSummary") or {}
 
-    vulnerability_matches = device.get("vulnerabilityMatches")
-    if vulnerability_matches is None:
-        vulnerability_matches = ar_summary.get("vulnerabilityMatches")
-    if vulnerability_matches is None:
-        vulnerability_matches = await check_osv_vulnerabilities(raw_scan)
+    # Full OSV matches (with fix_version). The cache is warm from the scan, so this is
+    # fast; the analyzers need the fix versions to build upgrade commands.
+    matches = await check_osv_vulnerabilities(raw_scan)
 
-    ai_analysis = await analyze_with_ai(
-        raw_scan=raw_scan,
-        ar_summary=ar_summary,
-        vulnerability_matches=vulnerability_matches
-    )
+    ai_analysis = await analyze_with_ai(raw_scan, ar_summary, matches)
+    if not ai_analysis.get("enabled"):
+        # Gemini unavailable (no key / rate limit / error) -> deterministic offline analysis.
+        # The artificial delay lets the AR "analyzing" animation play.
+        log.info("Analyze: Gemini unavailable, using offline analysis for %s", hostname)
+        await asyncio.sleep(OFFLINE_ANALYZE_DELAY)
+        ai_analysis = analyze_offline(raw_scan, ar_summary, matches)
 
-    log.info(f"AI ANALYSIS RESULT for {hostname}: {ai_analysis}")
+    log.info(f"ANALYSIS RESULT for {hostname}: {ai_analysis}")
 
     updated_ar_summary = {
         **ar_summary,
-        "vulnerabilityMatches": vulnerability_matches,
+        "vulnerabilityMatches": matches,
         "aiSummary": ai_analysis.get("risk_summary"),
         "aiRecommendation": ai_analysis.get("recommendation"),
         "aiReasoning": ai_analysis.get("reasoning", []),
@@ -222,7 +225,7 @@ async def analyze_device(hostname: str):
     }
 
     await store.update_device(hostname, {
-        "vulnerabilityMatches": vulnerability_matches,
+        "vulnerabilityMatches": matches,
         "aiAnalysis": ai_analysis,
         "arSummary": updated_ar_summary,
         "analyzedAt": datetime.now(timezone.utc),
@@ -233,7 +236,7 @@ async def analyze_device(hostname: str):
     return {
         "success": True,
         "hostname": hostname,
-        "vulnerabilityMatches": vulnerability_matches,
+        "vulnerabilityMatches": matches,
         "aiAnalysis": ai_analysis,
         "arSummary": updated_ar_summary
     }
