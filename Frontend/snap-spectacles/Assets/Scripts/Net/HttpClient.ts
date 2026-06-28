@@ -4,8 +4,10 @@
  * backend base URL from the configured WebSocket URL. Replaces the ws://->http:// transform
  * that was previously duplicated across DeviceListPanel and DeviceDetailPanel.
  *
- * Request method / headers / JSON body are constructed identically to the original inline
- * calls, so the live HTTP traffic is byte-for-byte unchanged.
+ * Every POST sends a JSON body (defaulting to `{}`) with a Content-Type header. This is
+ * deliberate: on Spectacles, a body-less POST gets emitted as a GET, so bodyless calls like
+ * triggerScan()/analyze() previously arrived at the backend as GET. Always sending a body
+ * guarantees the request leaves the device as a real POST.
  */
 
 export interface HttpResult {
@@ -37,7 +39,7 @@ export class HttpClient {
     return this.request(path, RemoteServiceHttpRequest.HttpRequestMethod.Get)
   }
 
-  post(path: string, jsonBody?: object): Promise<HttpResult> {
+  post(path: string, jsonBody: object = {}): Promise<HttpResult> {
     return this.request(path, RemoteServiceHttpRequest.HttpRequestMethod.Post, jsonBody)
   }
 

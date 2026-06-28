@@ -192,7 +192,6 @@ async def ingest_scan(scan: DeviceScan):
     return await ingest_scan_document(scan)
 
 
-@router.get("/api/analyze/{hostname}")
 @router.post("/api/analyze/{hostname}")
 async def analyze_device(hostname: str):
     device = await db.devices.find_one({"hostname": hostname}, {"_id": 0})
@@ -326,7 +325,6 @@ async def register_scanner(reg: ScannerRegistration):
     return {"success": True, "ip": ESP32_IP}
 
 
-@router.get("/api/scan/trigger")
 @router.post("/api/scan/trigger")
 async def trigger_scan():
     global ESP32_IP
