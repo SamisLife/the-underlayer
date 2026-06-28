@@ -59,18 +59,10 @@ async def root():
 
 @app.get("/api/health")
 async def health():
-    """Unified health check — storage backend plus loaded SSH host/command counts."""
-    try:
-        ok = await store.ping()
-        storage = store.name if ok else f"{store.name}: not responding"
-        status = "healthy" if ok else "error"
-    except Exception as e:
-        storage = f"{store.name}: error: {e}"
-        status = "error"
-
+    """Health check — storage mode plus loaded SSH host/command counts."""
     return {
-        "status": status,
-        "storage": storage,
+        "status": "healthy",
+        "storage": store.name,
         "registered_hosts": len(HOSTS),
         "ssh_commands_loaded": len(COMMANDS),
     }

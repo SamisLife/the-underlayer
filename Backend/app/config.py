@@ -23,12 +23,6 @@ LOG_DIR.mkdir(exist_ok=True)
 SCAN_DIR.mkdir(exist_ok=True)
 REPORTS_DIR.mkdir(exist_ok=True)
 
-# ── Storage ───────────────────────────────────────────────────────────────────
-# MongoDB is optional. If MONGO_URI is unset, the app uses an in-memory store
-# (data lives until restart) so it runs with zero external dependencies.
-MONGO_URI = os.getenv("MONGO_URI")
-MONGO_DB = os.getenv("MONGO_DB", "underlayer")
-
 # ── AI inference (Google Gemini) ──────────────────────────────────────────────
 # Optional: without a key, /api/learn falls back to the offline knowledge base.
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")

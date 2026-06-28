@@ -100,7 +100,7 @@ def log_scan_summary(scan_dict: Dict[str, Any], ar_summary: Dict[str, Any], scan
     else:
         log.info("  CVE hits  : none")
 
-    log.info("  Saved     : scanId=%s  →  MongoDB ✓", scan_id)
+    log.info("  Saved     : scanId=%s  →  stored ✓", scan_id)
     log.info(sep)
 
 
