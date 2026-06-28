@@ -30,9 +30,8 @@ MONGO_DB = os.getenv("MONGO_DB", "underlayer")
 if not MONGO_URI:
     raise RuntimeError("Missing MONGO_URI in .env")
 
-# ── AI inference ──────────────────────────────────────────────────────────────
-DO_AI_API_KEY = os.getenv("DO_AI_API_KEY")
-DO_AI_MODEL = os.getenv("DO_AI_MODEL", "openai-gpt-oss-120b")
+# ── AI inference (Google Gemini) ──────────────────────────────────────────────
+# Optional: without a key, /api/learn falls back to the offline knowledge base.
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 # ── Server ────────────────────────────────────────────────────────────────────

@@ -1,7 +1,8 @@
-"""AI analysis and topic explanation.
+"""AI analysis and topic explanation, backed by Google Gemini.
 
-Primary provider is DigitalOcean AI inference; Google Gemini is used as a fallback
-when the DO call fails. (Dedup of the two fallback ladders is tracked separately.)
+call_llm is the single entry point to the model. Device analysis requires a key;
+topic explanation falls back to the offline knowledge base (app/knowledge.py) so the
+lens still works without one.
 """
 
 import json
@@ -10,31 +11,48 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from .config import DO_AI_API_KEY, DO_AI_MODEL, GOOGLE_API_KEY
+from . import knowledge
+from .config import GOOGLE_API_KEY
 
 log = logging.getLogger("underlayer.ai")
 
+_GEMINI_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/models/"
+    "gemini-2.5-flash:generateContent"
+)
 
-async def analyze_with_digitalocean_ai(
+
+async def call_llm(prompt: str, json_mode: bool = False, timeout: float = 90) -> str:
+    """Call Google Gemini and return the raw text content.
+
+    Raises RuntimeError if no key is configured or the call fails.
+    """
+    if not GOOGLE_API_KEY:
+        raise RuntimeError("No AI provider configured (set GOOGLE_API_KEY)")
+
+    payload: Dict[str, Any] = {"contents": [{"parts": [{"text": prompt}]}]}
+    if json_mode:
+        payload["generationConfig"] = {"responseMimeType": "application/json"}
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        resp = await client.post(f"{_GEMINI_URL}?key={GOOGLE_API_KEY}", json=payload)
+    resp.raise_for_status()
+    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+
+
+async def analyze_with_ai(
     raw_scan: dict,
     ar_summary: dict,
     vulnerability_matches: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
-    if not DO_AI_API_KEY:
+    if not GOOGLE_API_KEY:
         return {
             "enabled": False,
             "risk_summary": "AI analysis is not configured.",
-            "recommendation": "Set DO_AI_API_KEY in .env.",
+            "recommendation": "Set GOOGLE_API_KEY in .env.",
             "reasoning": [],
             "actions": []
         }
-
-    url = "https://inference.do-ai.run/v1/chat/completions"
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {DO_AI_API_KEY}"
-    }
 
     prompt = f"""
 You are the AI security agent for The Underlayer, an AR cybersecurity assistant.
@@ -97,68 +115,9 @@ Your command MUST be formatted exactly like this:
 You must read the `os` and `environment` fields from the raw device scan to deduce the OS type, and combine that with the `fix_version` provided in the vulnerability matches to synthesize the exact, perfectly formed command.
 """
 
-    payload = {
-        "model": DO_AI_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 700
-    }
-
     try:
-        async with httpx.AsyncClient(timeout=90) as client:
-            response = await client.post(url, headers=headers, json=payload)
-        response.raise_for_status()
-
-        result = response.json()
-        content = result["choices"][0]["message"]["content"]
-
-        try:
-            parsed = json.loads(content)
-            parsed["enabled"] = True
-            return parsed
-        except Exception:
-            return {
-                "enabled": True,
-                "risk_summary": content,
-                "recommendation": "Review AI response.",
-                "reasoning": [],
-                "actions": []
-            }
-
+        content = await call_llm(prompt, json_mode=True, timeout=90)
     except Exception as e:
-        if GOOGLE_API_KEY:
-            try:
-                gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GOOGLE_API_KEY}"
-                gemini_payload = {
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"responseMimeType": "application/json"}
-                }
-                async with httpx.AsyncClient(timeout=90) as client:
-                    gemini_resp = await client.post(gemini_url, json=gemini_payload)
-                gemini_resp.raise_for_status()
-                gemini_result = gemini_resp.json()
-                content = gemini_result["candidates"][0]["content"]["parts"][0]["text"]
-
-                try:
-                    parsed = json.loads(content)
-                    parsed["enabled"] = True
-                    return parsed
-                except Exception:
-                    return {
-                        "enabled": True,
-                        "risk_summary": content,
-                        "recommendation": "Review AI response.",
-                        "reasoning": [],
-                        "actions": []
-                    }
-            except Exception as gemini_e:
-                return {
-                    "enabled": False,
-                    "risk_summary": "AI analysis failed.",
-                    "recommendation": "Use rule-based findings for now.",
-                    "reasoning": [f"DO Error: {e}", f"Gemini Error: {gemini_e}"],
-                    "actions": []
-                }
-
         return {
             "enabled": False,
             "risk_summary": "AI analysis failed.",
@@ -167,46 +126,36 @@ You must read the `os` and `environment` fields from the raw device scan to dedu
             "actions": []
         }
 
-
-async def explain_topic_with_ai(topic: str, context: Optional[str] = None) -> str:
-    prompt = f"Explain what '{topic}' is in the context of cybersecurity and networking."
-    if context:
-        prompt += f"\nContext: {context}"
-    prompt += "\nExplain it in 2-3 short, concise sentences. Focus on what it is and what vulnerabilities it might expose. Return only the plain text explanation, no markdown, no quotes."
-
-    payload = {
-        "model": DO_AI_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 150
-    }
-
     try:
-        if not DO_AI_API_KEY:
-            raise ValueError("DO_AI_API_KEY not set")
-
-        url = "https://inference.do-ai.run/v1/chat/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {DO_AI_API_KEY}"
+        parsed = json.loads(content)
+        parsed["enabled"] = True
+        return parsed
+    except Exception:
+        return {
+            "enabled": True,
+            "risk_summary": content,
+            "recommendation": "Review AI response.",
+            "reasoning": [],
+            "actions": []
         }
-        async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.post(url, headers=headers, json=payload)
-        response.raise_for_status()
 
-        result = response.json()
-        return result["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        if GOOGLE_API_KEY:
-            try:
-                gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GOOGLE_API_KEY}"
-                gemini_payload = {
-                    "contents": [{"parts": [{"text": prompt}]}],
-                }
-                async with httpx.AsyncClient(timeout=20) as client:
-                    gemini_resp = await client.post(gemini_url, json=gemini_payload)
-                gemini_resp.raise_for_status()
-                gemini_result = gemini_resp.json()
-                return gemini_result["candidates"][0]["content"]["parts"][0]["text"].strip()
-            except Exception as gemini_e:
-                return f"AI explanation failed. DO Error: {e}, Gemini Error: {gemini_e}"
-        return f"AI explanation failed. {str(e)}"
+
+async def explain_topic(topic: str, context: Optional[str] = None) -> str:
+    """Explain a port or threat-analysis metric.
+
+    Prefers a personalized Gemini explanation; falls back to the offline knowledge
+    base (and a "wire an API key" hint for unrecognized topics) when no key is set or
+    the AI call fails.
+    """
+    if GOOGLE_API_KEY:
+        prompt = f"Explain what '{topic}' is in the context of cybersecurity and networking."
+        if context:
+            prompt += f"\nContext: {context}"
+        prompt += "\nExplain it in 2-3 short, concise sentences. Focus on what it is and what vulnerabilities it might expose. Return only the plain text explanation, no markdown, no quotes."
+        try:
+            content = await call_llm(prompt, timeout=20)
+            return content.strip()
+        except Exception as e:
+            log.warning("Gemini explain failed for '%s', using offline reference: %s", topic, e)
+
+    return knowledge.lookup_explanation(topic) or knowledge.unknown_message(topic)

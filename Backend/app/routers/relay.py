@@ -12,7 +12,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import run_in_threadpool
 
-from ..ai import analyze_with_digitalocean_ai, explain_topic_with_ai
+from ..ai import analyze_with_ai, explain_topic
 from ..db import db
 from ..models import ApprovalRequest, DeviceScan, LearnRequest, ScannerRegistration
 from ..osv import check_osv_vulnerabilities
@@ -209,7 +209,7 @@ async def analyze_device(hostname: str):
     if vulnerability_matches is None:
         vulnerability_matches = await check_osv_vulnerabilities(raw_scan)
 
-    ai_analysis = await analyze_with_digitalocean_ai(
+    ai_analysis = await analyze_with_ai(
         raw_scan=raw_scan,
         ar_summary=ar_summary,
         vulnerability_matches=vulnerability_matches
@@ -306,7 +306,7 @@ async def approve_action(request: ApprovalRequest):
 @router.post("/api/learn")
 async def learn_topic(req: LearnRequest):
     try:
-        explanation = await explain_topic_with_ai(req.topic, req.context)
+        explanation = await explain_topic(req.topic, req.context)
         # Force word wrapping server-side (around 28 chars per line)
         # This completely prevents Lens Studio from cutting off letters in 3D space
         wrapped_explanation = textwrap.fill(explanation, width=28)
