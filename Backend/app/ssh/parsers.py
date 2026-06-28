@@ -1,12 +1,15 @@
 """Parsers that turn raw SSH command output into the structured scan document."""
 
 import json
+import logging
 import re
 from typing import Any, Dict, List, Optional
 
 from ..config import ENGINE_VERSION
 from ..models import MatchedDevice
 from .classify import WELL_KNOWN_PORTS
+
+log = logging.getLogger("underlayer.ssh")
 
 
 def _parse_os_release(text: str) -> Dict[str, str]:
@@ -82,8 +85,8 @@ def parse_python(raw: Dict[str, str]) -> Optional[Dict]:
             for p in json.loads(raw.get("python_packages", "[]"))
             if p.get("name")
         ]
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug("parse_python: could not parse python_packages JSON: %s", e)
     return {"version": version, "packages": pkgs} if (version or pkgs) else None
 
 
@@ -95,8 +98,8 @@ def parse_nodejs(raw: Dict[str, str]) -> Optional[Dict]:
         npm = json.loads(raw.get("node_packages", "{}"))
         for name, info in (npm.get("dependencies") or {}).items():
             pkgs.append({"name": name, "version": info.get("version", "")})
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug("parse_nodejs: could not parse node_packages JSON: %s", e)
     return {"version": version, "packages": pkgs} if (version or pkgs) else None
 
 
