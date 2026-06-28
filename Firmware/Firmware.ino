@@ -34,9 +34,9 @@
 const char* WIFI_SSID = "WIFI_SSID";
 const char* WIFI_PASS = "WIFI_PASS";
 
-// ── Backend endpoint (ssh_engine.py) ─────────────────────────────────
+// ── Backend endpoint (unified Underlayer server, app.main) ───────────
 const char* BACKEND_HOST = "IP_ADDRESS";   // ← set to your laptop's LAN IP
-const int   BACKEND_PORT = 8001;
+const int   BACKEND_PORT = 8000;           // relay + SSH engine now share one port
 
 // ── Timing constants ──────────────────────────────────────────────────
 const unsigned long WIFI_TIMEOUT_MS    = 15000;
