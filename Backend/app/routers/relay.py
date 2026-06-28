@@ -10,13 +10,14 @@ from typing import List
 
 import httpx
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.concurrency import run_in_threadpool
 
 from ..ai import analyze_with_digitalocean_ai, explain_topic_with_ai
-from ..config import INTERNAL_API_URL
 from ..db import db
 from ..models import ApprovalRequest, DeviceScan, LearnRequest, ScannerRegistration
 from ..osv import check_osv_vulnerabilities
 from ..reporting import log_scan_summary, save_report
+from ..ssh.commands import run_command_on_host
 from ..summary import build_ar_summary
 
 log = logging.getLogger("underlayer.relay")
@@ -64,8 +65,12 @@ async def clear_devices():
         return {"status": "error", "error": str(e)}
 
 
-@router.post("/api/scan")
-async def ingest_scan(scan: DeviceScan):
+async def ingest_scan_document(scan: DeviceScan) -> dict:
+    """Core scan-ingest: CVE enrichment, persistence, and broadcast.
+
+    Callable both as the /api/scan route body and directly in-process from the SSH
+    pipeline (via the thread→loop bridge).
+    """
     try:
         log.info("Relay received  %s  (IP: %s  MAC: %s)", scan.hostname, scan.ip, scan.mac)
         scan_dict = scan.model_dump()
@@ -182,6 +187,11 @@ async def ingest_scan(scan: DeviceScan):
         raise
 
 
+@router.post("/api/scan")
+async def ingest_scan(scan: DeviceScan):
+    return await ingest_scan_document(scan)
+
+
 @router.get("/api/analyze/{hostname}")
 @router.post("/api/analyze/{hostname}")
 async def analyze_device(hostname: str):
@@ -257,15 +267,9 @@ async def approve_action(request: ApprovalRequest):
 
     if request.approved:
         try:
-            # The SSH engine now lives in this same process. Use a non-blocking
-            # async self-call so the event loop stays free to serve the
-            # /api/ssh/run-command request that this awaits.
-            async with httpx.AsyncClient(timeout=35) as client:
-                resp = await client.post(
-                    f"{INTERNAL_API_URL}/api/ssh/run-command",
-                    json={"hostname": request.hostname, "command": request.command},
-                )
-            data = resp.json()
+            # The SSH engine now lives in this same process. Run the blocking SSH
+            # command in a worker thread so the event loop stays free.
+            data = await run_in_threadpool(run_command_on_host, request.hostname, request.command)
             action_doc["sshOutput"] = data.get("stdout") or data.get("error")
             action_doc["sentToSshEngine"] = True
             action_doc["sshSuccess"] = data.get("ok", False)

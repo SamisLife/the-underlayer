@@ -9,18 +9,19 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict
 
-import requests
 from fastapi import APIRouter, BackgroundTasks
 
-from ..config import ENGINE_VERSION, INTERNAL_API_URL, SSH_PORT
+from ..bridge import run_blocking
+from ..config import ENGINE_VERSION
+from ..db import db
 from ..models import (
-    BluetoothDevice,
     BluetoothScanPayload,
     DirectScanRequest,
     MatchedDevice,
     RunCommandRequest,
 )
-from ..ssh.classify import HOSTS, build_matched_device
+from ..ssh.classify import build_matched_device
+from ..ssh.commands import run_command_on_host
 from ..ssh.parsers import build_scan_document
 from ..ssh.pipeline import post_to_relay, run_ssh_scan, save_scan_log
 from ..ssh.scanner import SSHScanner
@@ -54,9 +55,10 @@ def bluetooth_scan(
     for bt in payload.devices:
         log.info("  - %s (MAC: %s, RSSI: %s)", bt.name, bt.mac, bt.rssi)
 
-    # Clear previous scan results in the relay database
+    # Clear previous scan results in the relay database (direct in-process call;
+    # this sync route runs in a worker thread, so it bridges to the event loop).
     try:
-        requests.delete(f"{INTERNAL_API_URL}/api/devices", timeout=5)
+        run_blocking(db.devices.delete_many({}))
         log.info("Cleared previous devices in Relay MongoDB")
     except Exception as e:
         log.warning("Failed to clear relay database before scan: %s", e)
@@ -193,55 +195,4 @@ def run_command(req: RunCommandRequest):
     Run an arbitrary command on the target host via SSH.
     It looks up the credentials from hosts.json via the hostname.
     """
-    bt_mock = BluetoothDevice(name=req.hostname, mac=req.hostname)
-    matched = build_matched_device(bt_mock)
-
-    if not matched:
-        # Fallback to direct hostname match if bt_mock fails
-        for h in HOSTS:
-            if h.get("hostname") == req.hostname:
-                matched = MatchedDevice(
-                    hostname=h.get("hostname"),
-                    ssh_port=h.get("ssh_port", SSH_PORT),
-                    ssh_user=h.get("ssh_user"),
-                    ssh_password=h.get("ssh_password"),
-                    ssh_key_path=h.get("ssh_key_path"),
-                )
-                break
-
-    if not matched:
-        return {"ok": False, "error": f"Host '{req.hostname}' not found in hosts.json"}
-
-    scanner = SSHScanner(
-        host     = matched.hostname,
-        port     = matched.ssh_port,
-        username = matched.ssh_user     or "ubuntu",
-        password = matched.ssh_password or "",
-        key_path = matched.ssh_key_path or "",
-    )
-
-    if not scanner.connect():
-        return {"ok": False, "error": "SSH connection failed"}
-
-    try:
-        cmd_to_run = req.command
-        # If using sudo and a password is known, inject it via stdin using -S.
-        # NOTE: this exposes the password in the remote process list — acceptable
-        # only for a controlled demo network.
-        if "sudo " in cmd_to_run and matched.ssh_password:
-            cmd_to_run = cmd_to_run.replace("sudo ", f"echo '{matched.ssh_password}' | sudo -S ", 1)
-
-        log.info("Executing remote command on %s: %s", req.hostname, cmd_to_run.replace(f"'{matched.ssh_password}'", "'***'"))
-
-        stdout = scanner.run(cmd_to_run, timeout=30)
-
-        if stdout:
-            log.info("Command output:\n%s", stdout)
-        else:
-            log.info("Command completed with no output.")
-
-        return {"ok": True, "stdout": stdout}
-    except Exception as exc:
-        return {"ok": False, "error": str(exc)}
-    finally:
-        scanner.close()
+    return run_command_on_host(req.hostname, req.command)

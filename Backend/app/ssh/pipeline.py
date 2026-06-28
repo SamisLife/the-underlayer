@@ -1,10 +1,8 @@
 """Scan-and-forward pipeline: SSH into a matched host, parse its inventory, and
-hand the result to the relay's ingest endpoint.
+hand the result to the relay's ingest logic.
 
-post_to_relay still posts over HTTP to the unified server's own /api/scan. It runs
-inside a Starlette background task (a worker thread), so a blocking request here does
-not stall the event loop. Converting this last hop to a direct in-process call is
-tracked as B2.
+post_to_relay runs inside a Starlette background task (a worker thread). It calls the
+async ingest coroutine directly in-process via the thread→loop bridge — no self-HTTP.
 """
 
 import json
@@ -14,10 +12,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
-import requests
-
-from ..config import ENGINE_VERSION, INTERNAL_API_URL, SCAN_DIR
-from ..models import MatchedDevice
+from ..bridge import run_blocking
+from ..config import ENGINE_VERSION, SCAN_DIR
+from ..models import DeviceScan, MatchedDevice
 from .parsers import build_scan_document
 from .scanner import SSHScanner
 
@@ -25,12 +22,12 @@ log = logging.getLogger("underlayer.ssh")
 
 
 def post_to_relay(scan_doc: Dict[str, Any]) -> bool:
-    url = f"{INTERNAL_API_URL}/api/scan"
+    # Imported lazily to avoid an import cycle (relay → pipeline → relay).
+    from ..routers.relay import ingest_scan_document
     try:
-        resp = requests.post(url, json=scan_doc, timeout=15)
-        resp.raise_for_status()
+        result = run_blocking(ingest_scan_document(DeviceScan(**scan_doc)))
         log.info("Relay ✓  %s  (scanId=%s)",
-                 scan_doc.get("hostname"), resp.json().get("scanId"))
+                 scan_doc.get("hostname"), result.get("scanId"))
         return True
     except Exception as exc:
         log.error("Relay ✗  %s: %s", scan_doc.get("hostname"), exc)

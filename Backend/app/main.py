@@ -7,11 +7,14 @@ Run:  uvicorn app.main:app --host 0.0.0.0 --port 8000
   or:  python -m app.main
 """
 
+import asyncio
 import logging
 import logging.handlers
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from . import bridge
 from .config import ENGINE_VERSION, LOG_DIR, PORT
 from .db import db
 from .routers import relay, scanner
@@ -30,7 +33,16 @@ logging.basicConfig(level=logging.INFO, handlers=[_console, _file])
 log = logging.getLogger("underlayer")
 
 # ── App ───────────────────────────────────────────────────────────────────────
-app = FastAPI(title="The Underlayer", version=ENGINE_VERSION)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Capture the running loop so worker threads (SSH scans) can call async
+    # ingest in-process via app.bridge.run_blocking.
+    bridge.set_loop(asyncio.get_running_loop())
+    yield
+
+
+app = FastAPI(title="The Underlayer", version=ENGINE_VERSION, lifespan=lifespan)
 
 app.include_router(relay.router)
 app.include_router(scanner.router)

@@ -38,11 +38,6 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 # ── Server ────────────────────────────────────────────────────────────────────
 PORT = int(os.getenv("PORT", "8000"))
 
-# Base URL the app uses to call its own endpoints (the relay and SSH engine are
-# now one process). RELAY_URL is honored for backward compatibility with existing
-# .env files; both default to the local unified server.
-INTERNAL_API_URL = os.getenv("INTERNAL_API_URL", os.getenv("RELAY_URL", f"http://localhost:{PORT}"))
-
 # ── SSH connection defaults ───────────────────────────────────────────────────
 SSH_PORT = int(os.getenv("SSH_PORT", "22"))
 SSH_TIMEOUT = int(os.getenv("SSH_TIMEOUT", "10"))
