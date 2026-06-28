@@ -13,7 +13,7 @@ from fastapi import APIRouter, BackgroundTasks
 
 from ..bridge import run_blocking
 from ..config import ENGINE_VERSION
-from ..db import db
+from ..store import store
 from ..models import (
     BluetoothScanPayload,
     DirectScanRequest,
@@ -58,8 +58,8 @@ def bluetooth_scan(
     # Clear previous scan results in the relay database (direct in-process call;
     # this sync route runs in a worker thread, so it bridges to the event loop).
     try:
-        run_blocking(db.devices.delete_many({}))
-        log.info("Cleared previous devices in Relay MongoDB")
+        run_blocking(store.clear_devices())
+        log.info("Cleared previous devices from storage")
     except Exception as e:
         log.warning("Failed to clear relay database before scan: %s", e)
 

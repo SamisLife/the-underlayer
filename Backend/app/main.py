@@ -16,9 +16,9 @@ from fastapi import FastAPI
 
 from . import bridge
 from .config import ENGINE_VERSION, LOG_DIR, PORT
-from .db import db
 from .routers import relay, scanner
 from .ssh.classify import COMMANDS, HOSTS
+from .store import store
 
 # ── Logging (console + rotating file) ─────────────────────────────────────────
 _fmt = logging.Formatter("%(asctime)s  %(levelname)-8s  %(name)s  %(message)s", datefmt="%H:%M:%S")
@@ -59,18 +59,18 @@ async def root():
 
 @app.get("/api/health")
 async def health():
-    """Unified health check — Mongo connectivity plus loaded SSH host/command counts."""
+    """Unified health check — storage backend plus loaded SSH host/command counts."""
     try:
-        await db.command("ping")
-        mongo_status = "connected"
-        status = "healthy"
+        ok = await store.ping()
+        storage = store.name if ok else f"{store.name}: not responding"
+        status = "healthy" if ok else "error"
     except Exception as e:
-        mongo_status = f"error: {e}"
+        storage = f"{store.name}: error: {e}"
         status = "error"
 
     return {
         "status": status,
-        "mongodb": mongo_status,
+        "storage": storage,
         "registered_hosts": len(HOSTS),
         "ssh_commands_loaded": len(COMMANDS),
     }

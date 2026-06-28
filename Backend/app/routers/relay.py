@@ -13,11 +13,11 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import run_in_threadpool
 
 from ..ai import analyze_with_ai, explain_topic
-from ..db import db
 from ..models import ApprovalRequest, DeviceScan, LearnRequest, ScannerRegistration
 from ..osv import check_osv_vulnerabilities
 from ..reporting import log_scan_summary, save_report
 from ..ssh.commands import run_command_on_host
+from ..store import store
 from ..summary import build_ar_summary
 
 log = logging.getLogger("underlayer.relay")
@@ -61,10 +61,10 @@ async def broadcast_device_update(ar_summary: dict):
 
 @router.delete("/api/devices")
 async def clear_devices():
-    """Clears all devices from the database. Called at the start of a new scan session."""
+    """Clears all devices from storage. Called at the start of a new scan session."""
     try:
-        result = await db.devices.delete_many({})
-        return {"status": "ok", "deleted_count": result.deleted_count}
+        deleted = await store.clear_devices()
+        return {"status": "ok", "deleted_count": deleted}
     except Exception as e:
         log.error("Failed to clear devices: %s", e)
         return {"status": "error", "error": str(e)}
@@ -155,33 +155,27 @@ async def ingest_scan_document(scan: DeviceScan) -> dict:
             "arSummary": ar_summary,
         }
 
-        insert_result = await db.device_scans.insert_one(raw_doc)
+        scan_id = await store.save_scan(raw_doc)
 
-        await db.devices.update_one(
-            {"deviceId": ar_summary["deviceId"]},
-            {
-                "$set": {
-                    "hostname": scan.hostname,
-                    "deviceId": scan.device_id or scan.hostname,
-                    "mac": scan.mac,
-                    "ip": scan.ip,
-                    "updatedAt": now,
-                    "latestScanId": str(insert_result.inserted_id),
-                    "latestRawScan": scan_dict,
-                    "arSummary": ar_summary,
-                }
-            },
-            upsert=True,
-        )
+        await store.upsert_device(ar_summary["deviceId"], {
+            "hostname": scan.hostname,
+            "deviceId": scan.device_id or scan.hostname,
+            "mac": scan.mac,
+            "ip": scan.ip,
+            "updatedAt": now,
+            "latestScanId": scan_id,
+            "latestRawScan": scan_dict,
+            "arSummary": ar_summary,
+        })
 
         await broadcast_device_update(ar_summary)
 
-        log_scan_summary(scan_dict, ar_summary, str(insert_result.inserted_id), vuln_hits)
+        log_scan_summary(scan_dict, ar_summary, scan_id, vuln_hits)
         save_report(scan.hostname, now, ar_summary, vuln_hits)
 
         return {
             "success": True,
-            "scanId": str(insert_result.inserted_id),
+            "scanId": scan_id,
             "arSummary": ar_summary,
         }
     except Exception:
@@ -196,7 +190,7 @@ async def ingest_scan(scan: DeviceScan):
 
 @router.post("/api/analyze/{hostname}")
 async def analyze_device(hostname: str):
-    device = await db.devices.find_one({"hostname": hostname}, {"_id": 0})
+    device = await store.get_device(hostname)
 
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -227,17 +221,12 @@ async def analyze_device(hostname: str):
         "problems": ai_analysis.get("problems", [])
     }
 
-    await db.devices.update_one(
-        {"hostname": hostname},
-        {
-            "$set": {
-                "vulnerabilityMatches": vulnerability_matches,
-                "aiAnalysis": ai_analysis,
-                "arSummary": updated_ar_summary,
-                "analyzedAt": datetime.now(timezone.utc)
-            }
-        }
-    )
+    await store.update_device(hostname, {
+        "vulnerabilityMatches": vulnerability_matches,
+        "aiAnalysis": ai_analysis,
+        "arSummary": updated_ar_summary,
+        "analyzedAt": datetime.now(timezone.utc),
+    })
 
     await broadcast_device_update(updated_ar_summary)
 
@@ -280,7 +269,7 @@ async def approve_action(request: ApprovalRequest):
             action_doc["sshSuccess"] = False
             message = "Action failed to execute."
 
-    result = await db.actions.insert_one(action_doc)
+    action_id = await store.save_action(action_doc)
 
     await broadcast_event({
         "event": "action_recorded",
@@ -297,7 +286,7 @@ async def approve_action(request: ApprovalRequest):
 
     return {
         "success": True,
-        "actionId": str(result.inserted_id),
+        "actionId": action_id,
         "status": action_doc["status"],
         "message": message,
         "sshOutput": action_doc.get("sshOutput")
@@ -348,32 +337,22 @@ async def trigger_scan():
 
 @router.get("/api/devices")
 async def get_devices():
-    devices = []
-
-    cursor = db.devices.find({}, {"_id": 0})
-    async for device in cursor:
-        devices.append(device)
-
-    return devices
+    return await store.list_devices()
 
 
 @router.get("/api/devices/ar")
 async def get_ar_devices():
     ar_devices = []
-
-    cursor = db.devices.find({}, {"_id": 0, "arSummary": 1})
-    async for device in cursor:
-        if "arSummary" in device:
-            summary = dict(device["arSummary"])
-            summary.pop("problems", None)
-            ar_devices.append(summary)
-
+    for summary in await store.list_ar_summaries():
+        summary = dict(summary)
+        summary.pop("problems", None)  # /api/devices/ar omits problems (unlike the WS feed)
+        ar_devices.append(summary)
     return ar_devices
 
 
 @router.get("/api/devices/{hostname}")
 async def get_device(hostname: str):
-    device = await db.devices.find_one({"hostname": hostname}, {"_id": 0})
+    device = await store.get_device(hostname)
 
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -387,16 +366,9 @@ async def websocket_devices(websocket: WebSocket):
     connected_clients.append(websocket)
 
     try:
-        ar_devices = []
-
-        cursor = db.devices.find({}, {"_id": 0, "arSummary": 1})
-        async for device in cursor:
-            if "arSummary" in device:
-                ar_devices.append(device["arSummary"])
-
         await websocket.send_json({
             "event": "initial_devices",
-            "devices": ar_devices
+            "devices": await store.list_ar_summaries()
         })
 
         while True:
