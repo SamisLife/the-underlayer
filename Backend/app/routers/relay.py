@@ -6,7 +6,7 @@ WebSocket stream.
 import logging
 import textwrap
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
@@ -24,9 +24,14 @@ log = logging.getLogger("underlayer.relay")
 
 router = APIRouter()
 
-# WebSocket clients + the ESP32 scanner IP are process-wide state for the relay.
+class _ScannerRegistry:
+    """The ESP32 scanner's self-reported IP, set at runtime via /api/scanner/register."""
+    ip: Optional[str] = None
+
+
+# WebSocket clients + the registered ESP32 scanner are process-wide state for the relay.
 connected_clients: List[WebSocket] = []
-ESP32_IP = None
+scanner = _ScannerRegistry()
 
 
 # ── Broadcast helpers ─────────────────────────────────────────────────────────
@@ -319,24 +324,22 @@ async def learn_topic(req: LearnRequest):
 
 @router.post("/api/scanner/register")
 async def register_scanner(reg: ScannerRegistration):
-    global ESP32_IP
-    ESP32_IP = reg.ip
-    log.info("ESP32 Scanner registered with IP: %s", ESP32_IP)
-    return {"success": True, "ip": ESP32_IP}
+    scanner.ip = reg.ip
+    log.info("ESP32 Scanner registered with IP: %s", scanner.ip)
+    return {"success": True, "ip": scanner.ip}
 
 
 @router.post("/api/scan/trigger")
 async def trigger_scan():
-    global ESP32_IP
-    if not ESP32_IP:
+    if not scanner.ip:
         log.warning("Scan trigger failed: ESP32 IP not registered")
         raise HTTPException(status_code=400, detail="ESP32 Scanner IP not registered yet.")
 
-    log.info("Triggering scan on ESP32 at %s...", ESP32_IP)
+    log.info("Triggering scan on ESP32 at %s...", scanner.ip)
     try:
         # Timeout is 15s since ESP32 blocks for 5s while scanning
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(f"http://{ESP32_IP}/api/scan")
+            resp = await client.post(f"http://{scanner.ip}/api/scan")
             resp.raise_for_status()
 
             # The ESP32 should return {"status": "complete", "devices_found": X}
