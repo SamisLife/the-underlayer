@@ -8,14 +8,14 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 
 from .config import DO_AI_API_KEY, DO_AI_MODEL, GOOGLE_API_KEY
 
 log = logging.getLogger("underlayer.ai")
 
 
-def analyze_with_digitalocean_ai(
+async def analyze_with_digitalocean_ai(
     raw_scan: dict,
     ar_summary: dict,
     vulnerability_matches: List[Dict[str, Any]]
@@ -104,7 +104,8 @@ You must read the `os` and `environment` fields from the raw device scan to dedu
     }
 
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=90)
+        async with httpx.AsyncClient(timeout=90) as client:
+            response = await client.post(url, headers=headers, json=payload)
         response.raise_for_status()
 
         result = response.json()
@@ -131,7 +132,8 @@ You must read the `os` and `environment` fields from the raw device scan to dedu
                     "contents": [{"parts": [{"text": prompt}]}],
                     "generationConfig": {"responseMimeType": "application/json"}
                 }
-                gemini_resp = requests.post(gemini_url, json=gemini_payload, timeout=90)
+                async with httpx.AsyncClient(timeout=90) as client:
+                    gemini_resp = await client.post(gemini_url, json=gemini_payload)
                 gemini_resp.raise_for_status()
                 gemini_result = gemini_resp.json()
                 content = gemini_result["candidates"][0]["content"]["parts"][0]["text"]
@@ -166,7 +168,7 @@ You must read the `os` and `environment` fields from the raw device scan to dedu
         }
 
 
-def explain_topic_with_ai(topic: str, context: Optional[str] = None) -> str:
+async def explain_topic_with_ai(topic: str, context: Optional[str] = None) -> str:
     prompt = f"Explain what '{topic}' is in the context of cybersecurity and networking."
     if context:
         prompt += f"\nContext: {context}"
@@ -187,7 +189,8 @@ def explain_topic_with_ai(topic: str, context: Optional[str] = None) -> str:
             "Content-Type": "application/json",
             "Authorization": f"Bearer {DO_AI_API_KEY}"
         }
-        response = requests.post(url, headers=headers, json=payload, timeout=20)
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(url, headers=headers, json=payload)
         response.raise_for_status()
 
         result = response.json()
@@ -199,7 +202,8 @@ def explain_topic_with_ai(topic: str, context: Optional[str] = None) -> str:
                 gemini_payload = {
                     "contents": [{"parts": [{"text": prompt}]}],
                 }
-                gemini_resp = requests.post(gemini_url, json=gemini_payload, timeout=20)
+                async with httpx.AsyncClient(timeout=20) as client:
+                    gemini_resp = await client.post(gemini_url, json=gemini_payload)
                 gemini_resp.raise_for_status()
                 gemini_result = gemini_resp.json()
                 return gemini_result["candidates"][0]["content"]["parts"][0]["text"].strip()

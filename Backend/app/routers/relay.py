@@ -209,7 +209,7 @@ async def analyze_device(hostname: str):
     if vulnerability_matches is None:
         vulnerability_matches = await check_osv_vulnerabilities(raw_scan)
 
-    ai_analysis = analyze_with_digitalocean_ai(
+    ai_analysis = await analyze_with_digitalocean_ai(
         raw_scan=raw_scan,
         ar_summary=ar_summary,
         vulnerability_matches=vulnerability_matches
@@ -306,7 +306,7 @@ async def approve_action(request: ApprovalRequest):
 @router.post("/api/learn")
 async def learn_topic(req: LearnRequest):
     try:
-        explanation = explain_topic_with_ai(req.topic, req.context)
+        explanation = await explain_topic_with_ai(req.topic, req.context)
         # Force word wrapping server-side (around 28 chars per line)
         # This completely prevents Lens Studio from cutting off letters in 3D space
         wrapped_explanation = textwrap.fill(explanation, width=28)
