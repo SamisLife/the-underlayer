@@ -1,18 +1,57 @@
 """OSV vulnerability lookup.
 
-Queries the OSV database (https://osv.dev/) for every pip / npm / apt package in a
-scan, in async batches, with an in-process cache keyed by (name, version, ecosystem).
+Two-pass query of the OSV database (https://osv.dev/) for every pip / npm / apt package:
+  1. /v1/querybatch — one cheap batched call that returns vuln ID *stubs*, used only to
+     find which packages have vulnerabilities.
+  2. /v1/query — a per-package call (concurrent, only for the vulnerable packages) that
+     returns the *full* vuln objects, which carry the real severity and fixed versions.
+querybatch alone returns stubs (no severity / no fixed version), so pass 2 is what makes
+threat levels accurate and lets the analyzers pin exact upgrade versions.
+
+Results are cached in-process by (name, version, ecosystem) so repeated scans don't re-hit
+the network.
 """
 
+import asyncio
 import logging
+import re
 
 import httpx
 
 log = logging.getLogger("underlayer.osv")
 
+
+def _ver_key(v: str):
+    # Numeric-aware, exception-safe version sort key.
+    return [(1, int(p)) if p.isdigit() else (0, p) for p in re.split(r"[.\-_+]", str(v))]
+
+
+def _applicable_fix(vuln: dict, installed: str):
+    """The fixed version a host should upgrade to: the smallest ECOSYSTEM fix above the
+    installed version (falls back to the highest fix). Skips GIT ranges (commit hashes)."""
+    fixes = [
+        event["fixed"]
+        for affected in vuln.get("affected") or []
+        for rng in affected.get("ranges") or []
+        if rng.get("type") == "ECOSYSTEM"
+        for event in rng.get("events") or []
+        if "fixed" in event
+    ]
+    if not fixes:
+        return None
+    try:
+        if installed:
+            higher = [f for f in fixes if _ver_key(f) > _ver_key(installed)]
+            if higher:
+                return min(higher, key=_ver_key)
+        return max(fixes, key=_ver_key)
+    except Exception:
+        return fixes[0]
+
 _osv_cache: dict = {}          # (name, version, ecosystem) -> list[vuln]
 _OSV_CACHE_MAX = 2000
 _OSV_BATCH_SIZE = 100
+_OSV_CONCURRENCY = 12          # max concurrent /v1/query enrichment requests
 _OSV_TIMEOUT = 12.0            # seconds per HTTP request
 
 
@@ -29,6 +68,17 @@ async def _query_osv_batch(queries: list) -> list:
     except Exception as e:
         log.warning("OSV batch query failed: %s", e)
         return [[] for _ in queries]
+
+
+async def _query_osv_package(client: httpx.AsyncClient, query: dict) -> list:
+    """POST /v1/query for one package — returns full vuln objects (severity + fixed versions)."""
+    try:
+        resp = await client.post("https://api.osv.dev/v1/query", json=query)
+        resp.raise_for_status()
+        return resp.json().get("vulns") or []
+    except Exception as e:
+        log.warning("OSV detail query failed for %s: %s", (query.get("package") or {}).get("name"), e)
+        return []
 
 
 async def check_osv_vulnerabilities(raw_scan: dict) -> list:
@@ -86,14 +136,33 @@ async def check_osv_vulnerabilities(raw_scan: dict) -> list:
         for k in list(_osv_cache.keys())[: _OSV_CACHE_MAX // 2]:
             del _osv_cache[k]
 
-    # Batch-query uncached entries in chunks of _OSV_BATCH_SIZE
+    # Pass 1 — querybatch (cheap, batched) to find which uncached packages have vulns.
     for chunk_start in range(0, len(uncached), _OSV_BATCH_SIZE):
         chunk = uncached[chunk_start : chunk_start + _OSV_BATCH_SIZE]
         vuln_lists = await _query_osv_batch([q for (_, _, q) in chunk])
         for (orig_idx, meta, query), vulns in zip(chunk, vuln_lists):
-            key = (query["package"]["name"], query.get("version", ""), query["package"]["ecosystem"])
-            _osv_cache[key] = vulns
-            results_map[orig_idx] = vulns
+            results_map[orig_idx] = vulns  # ID stubs only for now
+
+    # Pass 2 — enrich just the vulnerable packages via /v1/query to get full vuln objects
+    # (real severity + fixed versions). Concurrent + bounded; a failure keeps the stub.
+    to_enrich = [(i, q) for (i, _, q) in uncached if results_map.get(i)]
+    if to_enrich:
+        sem = asyncio.Semaphore(_OSV_CONCURRENCY)
+
+        async def _enrich(idx: int, query: dict):
+            async with sem:
+                return idx, await _query_osv_package(client, query)
+
+        async with httpx.AsyncClient(timeout=_OSV_TIMEOUT) as client:
+            for fut in asyncio.as_completed([_enrich(i, q) for i, q in to_enrich]):
+                idx, full = await fut
+                if full:
+                    results_map[idx] = full
+
+    # Cache the final (enriched) per-package result.
+    for (orig_idx, meta, query) in uncached:
+        key = (query["package"]["name"], query.get("version", ""), query["package"]["ecosystem"])
+        _osv_cache[key] = results_map.get(orig_idx, [])
 
     # Flatten into match dicts
     _sev_map = {"CRITICAL": "critical", "HIGH": "high",
@@ -105,18 +174,8 @@ async def check_osv_vulnerabilities(raw_scan: dict) -> list:
             db_specific = vuln.get("database_specific") or {}
             severity = _sev_map.get((db_specific.get("severity") or "").upper(), "medium")
 
-            # Extract the fixed version from affected ranges
-            fix_version = None
-            for affected in vuln.get("affected") or []:
-                for rng in affected.get("ranges") or []:
-                    for event in rng.get("events") or []:
-                        if "fixed" in event:
-                            fix_version = event["fixed"]
-                            break
-                    if fix_version:
-                        break
-                if fix_version:
-                    break
+            # The version this host should upgrade to (ECOSYSTEM ranges only — no GIT hashes).
+            fix_version = _applicable_fix(vuln, meta.get("version"))
 
             # Prefer a CVE- alias over the GHSA id
             cve_id = next(
