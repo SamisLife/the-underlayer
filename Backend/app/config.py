@@ -28,6 +28,9 @@ REPORTS_DIR.mkdir(exist_ok=True)
 # /api/analyze falls back to the offline rule-based analyzer.
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
+# Model — flash-lite is the fastest tier. Override via GEMINI_MODEL (e.g. gemini-2.5-flash).
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+
 # Artificial delay (seconds) for the offline analyze fallback, so the AR "analyzing"
 # animation has time to play. Set to 0 to disable.
 OFFLINE_ANALYZE_DELAY = float(os.getenv("OFFLINE_ANALYZE_DELAY", "3.5"))

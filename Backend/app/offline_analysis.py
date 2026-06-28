@@ -120,7 +120,7 @@ def analyze_offline(raw_scan: dict, ar_summary: dict, vuln_matches: List[dict]) 
 
     problems = _package_problems(vuln_matches, debian) + _finding_problems(raw_scan)
     problems.sort(key=lambda p: p.get("_rank", 1), reverse=True)
-    problems = problems[:8]
+    problems = problems[:6]  # the AR UI shows up to 6 (3 per side monitor)
     for p in problems:
         p.pop("_rank", None)
 
