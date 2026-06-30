@@ -83,7 +83,7 @@ export function normalizeDevice(input: Device | Record<string, any>): Device {
   }
 }
 
-export function guessDeviceType(device: Device, index: number): "phone" | "laptop" | "router" {
+export function guessDeviceType(device: Device): "phone" | "laptop" | "router" {
   // Directly use the classified device_type from the backend (via hosts.json -> Relay)
   const typeStr = String((device as any).deviceType || (device.ar_summary as any)?.deviceType || "").toLowerCase()
 

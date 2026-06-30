@@ -270,17 +270,9 @@ export class DeviceListPanel extends BaseScriptComponent {
 
       log.d(`3D Holo Menu initialized`)
 
-      // Connect to the backend
-      this.connectWebSocket()
-
     } catch (error) {
       log.e(`HUD initialization failed: ${error}`)
     }
-  }
-
-  private connectWebSocket(): void {
-    log.d(`WebSocket not supported natively. Data will be fetched on demand via HTTP.`)
-    // Don't fetch on init, let the show() method trigger the fetch.
   }
 
   private fetchData(): void {
@@ -453,7 +445,7 @@ export class DeviceListPanel extends BaseScriptComponent {
     this.countText.text = `${devices.length} ENTITIES`
 
     devices.forEach((device, index) => {
-      const type = guessDeviceType(device, index)
+      const type = guessDeviceType(device)
       const prefab = type === "phone" ? this.phonePrefab : (type === "router" ? this.routerPrefab : this.laptopPrefab)
 
       // The phone model is a bit too large compared to the others, so we scale it down specifically
@@ -482,11 +474,6 @@ export class DeviceListPanel extends BaseScriptComponent {
     })
 
     this.listRoot.getTransform().setLocalPosition(new vec3(0, 0, 0.6))
-
-    // Ensure cells start with correct alpha
-    this.cells.forEach(cell => {
-      cell.updateGlobalAlpha(cell.baseYPosition)
-    })
   }
 
   private playBootAnimation(): void {
@@ -551,8 +538,7 @@ export class DeviceListPanel extends BaseScriptComponent {
     }
 
     // Determine the correct prefab
-    const index = DeviceStore.getInstance().getDevices().indexOf(device)
-    const type = guessDeviceType(device, index >= 0 ? index : 0)
+    const type = guessDeviceType(device)
     let prefab: ObjectPrefab | undefined = undefined
     if (type === "phone") prefab = this.phonePrefab
     else if (type === "router") prefab = this.routerPrefab

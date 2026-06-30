@@ -32,8 +32,6 @@ export const CELL_STEP_X = CELL_W + CELL_GAP_X
 export const CELL_STEP_Y = CELL_H + CELL_GAP_Y
 export const GRID_START_X = -((COLUMNS - 1) * CELL_STEP_X) / 2.0
 export const GRID_START_Y = 4.0
-export const FADE_START_Y = 12.0
-export const FADE_END_Y = 16.0
 
 export class Device3DView {
   private root: SceneObject
@@ -43,13 +41,9 @@ export class Device3DView {
   private modelInstance: SceneObject | null = null
   private hoverInfoText: Text | null = null
 
-  private totalDrag: number = 0
-  private baseY: number = 0
-  private currentAlpha: number = 1.0
   private isHovered: boolean = false
 
-  private bgPlates: { plate: RoundedRectangle; baseColor: vec4; isBorder: boolean }[] = []
-  private bgTexts: { textObj: Text; baseColor: vec4 }[] = []
+  private hoverPlate: RoundedRectangle | null = null
 
   constructor(
     parent: SceneObject,
@@ -66,9 +60,9 @@ export class Device3DView {
     const row = Math.floor(index / COLUMNS)
 
     const posX = GRID_START_X + (col * CELL_STEP_X)
-    this.baseY = GRID_START_Y - (row * CELL_STEP_Y)
+    const baseY = GRID_START_Y - (row * CELL_STEP_Y)
 
-    this.root = makeObject(parent, layer, `UL_Cell_${index}`, new vec3(posX, this.baseY, 0.8))
+    this.root = makeObject(parent, layer, `UL_Cell_${index}`, new vec3(posX, baseY, 0.8))
     this.visualsRoot = makeObject(this.root, layer, `UL_Cell_${index}_Vis`, vec3.zero())
 
     const level = device.ar_summary.threatLevel || "unknown"
@@ -94,25 +88,14 @@ export class Device3DView {
     this.buildCell(accent, prefab)
   }
 
-  private addPlate(plate: RoundedRectangle, color: vec4, isBorder = false): RoundedRectangle {
-    this.bgPlates.push({ plate, baseColor: color, isBorder })
-    return plate
-  }
-
-  private addText(textObj: Text, color: vec4): Text {
-    this.bgTexts.push({ textObj, baseColor: color })
-    return textObj
-  }
-
   private handleTrigger(): void {
     this.onPin(this.device)
   }
 
   private handleHover(state: boolean): void {
     this.isHovered = state
-    if (this.bgPlates.length > 0) {
-      this.bgPlates[0].baseColor = state ? C_HOVER_BG : new vec4(0,0,0,0)
-      this.updateVisualAlpha(this.currentAlpha)
+    if (this.hoverPlate) {
+      this.hoverPlate.backgroundColor = state ? C_HOVER_BG : new vec4(0,0,0,0)
     }
     if (this.hoverInfoText) {
       this.hoverInfoText.enabled = state
@@ -135,11 +118,10 @@ export class Device3DView {
       new vec4(accent.x, accent.y, accent.z, 0.4),
       0.1
     )
-    this.addPlate(bg, new vec4(0,0,0,0))
-    this.addPlate(bg, new vec4(accent.x, accent.y, accent.z, 0.4), true)
+    this.hoverPlate = bg
 
     // Data Labels below the 3D model
-    this.addText(makeText(
+    makeText(
       this.visualsRoot,
       this.layer,
       `UL_Cell_${this.index}_Name`,
@@ -149,9 +131,9 @@ export class Device3DView {
       new vec3(0, -CELL_H / 2 + 3.5, 0.2),
       CELL_W - 2.0,
       8.0
-    ), C_WHITE)
+    )
 
-    this.addText(makeText(
+    makeText(
       this.visualsRoot,
       this.layer,
       `UL_Cell_${this.index}_IP`,
@@ -161,7 +143,7 @@ export class Device3DView {
       new vec3(0, -CELL_H / 2 + 1.5, 0.2),
       CELL_W - 2.0,
       6.0
-    ), C_CYAN)
+    )
 
     // Hover Information Text
     const osStr = this.device.ar_summary?.os || "UNKNOWN OS"
@@ -183,7 +165,6 @@ export class Device3DView {
       CELL_W + 20.0, // Wider
       22.0 // Taller to fit multiline
     )
-    this.addText(this.hoverInfoText, C_LOW)
     this.hoverInfoText.enabled = false
 
     // 3D Model Instance
@@ -195,7 +176,7 @@ export class Device3DView {
       this.modelInstance.getTransform().setLocalPosition(vec3.zero())
     } else {
       // Fallback if prefab missing
-      this.addText(makeText(
+      makeText(
         this.modelRoot,
         this.layer,
         `UL_Cell_${this.index}_Fallback`,
@@ -205,7 +186,7 @@ export class Device3DView {
         vec3.zero(),
         CELL_W,
         4.0
-      ), C_DIM)
+      )
     }
 
     // Gentle rotation animation for the 3D model
@@ -221,36 +202,6 @@ export class Device3DView {
         this.modelRoot.getTransform().setLocalRotation(quat.angleAxis(angle, vec3.up()))
       }
     })
-  }
-
-  public updateGlobalAlpha(globalY: number): void {
-    // Keep alpha at 1.0 since scrolling is removed
-    this.currentAlpha = 1.0
-    this.updateVisualAlpha(1.0)
-  }
-
-  private updateVisualAlpha(alpha: number): void {
-    if (Math.abs(this.currentAlpha - alpha) < 0.01) return
-    this.currentAlpha = alpha
-
-    this.visualsRoot.enabled = alpha > 0.01
-    this.button.enabled = alpha > 0.1
-
-    if (alpha > 0.01) {
-      this.bgPlates.forEach(p => {
-        const c = p.baseColor
-        if (p.isBorder) p.plate.borderColor = new vec4(c.x, c.y, c.z, c.w * alpha)
-        else p.plate.backgroundColor = new vec4(c.x, c.y, c.z, c.w * alpha)
-      })
-      this.bgTexts.forEach(t => {
-        const c = t.baseColor
-        t.textObj.textFill.color = new vec4(c.x, c.y, c.z, c.w * alpha)
-      })
-    }
-  }
-
-  public get baseYPosition(): number {
-    return this.baseY
   }
 
   public destroy(): void {
