@@ -1,6 +1,6 @@
 /**
  * HttpClient.ts
- * Thin Promise wrapper over LensStudio's InternetModule + a single place to derive the
+ * Thin Promise wrapper over LensStudio's InternetModule Fetch API + a single place to derive the
  * backend base URL from the configured WebSocket URL. Replaces the ws://->http:// transform
  * that was previously duplicated across DeviceListPanel and DeviceDetailPanel.
  *
@@ -36,29 +36,30 @@ export class HttpClient {
   }
 
   get(path: string): Promise<HttpResult> {
-    return this.request(path, RemoteServiceHttpRequest.HttpRequestMethod.Get)
+    return this.request(path, "GET")
   }
 
   post(path: string, jsonBody: object = {}): Promise<HttpResult> {
-    return this.request(path, RemoteServiceHttpRequest.HttpRequestMethod.Post, jsonBody)
+    return this.request(path, "POST", jsonBody)
   }
 
-  private request(path: string, method: any, jsonBody?: object): Promise<HttpResult> {
-    return new Promise<HttpResult>((resolve, reject) => {
-      try {
-        const request = RemoteServiceHttpRequest.create()
-        request.url = `${this.baseUrl}${path}`
-        request.method = method
-        if (jsonBody !== undefined) {
-          request.setHeader("Content-Type", "application/json")
-          request.body = JSON.stringify(jsonBody)
-        }
-        this.internetModule.performHttpRequest(request, (response: RemoteServiceHttpResponse) => {
-          resolve({ status: response.statusCode, body: response.body })
-        })
-      } catch (e) {
-        reject(e)
+  private request(path: string, method: string, jsonBody?: object): Promise<HttpResult> {
+    const options: any = {
+      method,
+      headers: {
+        "Content-Type": "application/json"
       }
+    }
+
+    if (jsonBody !== undefined) {
+      options.body = JSON.stringify(jsonBody)
+    }
+
+    return this.internetModule.fetch(`${this.baseUrl}${path}`, options).then((response: any) => {
+      return response.text().then((body: string) => ({
+        status: response.status,
+        body
+      }))
     })
   }
 }
