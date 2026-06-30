@@ -15,6 +15,40 @@ import {
 } from "./UI/Theme"
 import {makeObject, makeText, makePlate} from "./UI/UiBuilders"
 
+/**
+ * Construction options for DeviceDetailPanel. Built once by DeviceListPanel from its @inputs,
+ * so the panel takes one named-and-checked object instead of ~30 positional arguments.
+ * Scene/identity essentials (parent, layer, camera, device, world position) stay positional.
+ */
+export interface DeviceDetailPanelConfig {
+  indicatorPrefab?: ObjectPrefab
+  indicatorScale: number
+  indicatorMaterial?: Material
+  tripleMonitorPrefab?: ObjectPrefab
+  centerUIScale: number
+  centerUIOffset: vec3
+  centerUIRot: vec3
+  leftUIScale: number
+  leftUIOffset: vec3
+  leftUIRot: vec3
+  rightUIScale: number
+  rightUIOffset: vec3
+  rightUIRot: vec3
+  apiUrlBase: string
+  shellTerminalPrefab?: ObjectPrefab
+  shellTerminalScale: number
+  shellTerminalOffset: vec3
+  notebookPrefab?: ObjectPrefab
+  notebookScale: number
+  notebookOffset: vec3
+  notebookTitlePos: vec3
+  notebookTextPos: vec3
+  notebookCloseBtnPos: vec3
+  analyzeAudio?: AudioComponent
+  openAudio?: AudioComponent
+  selectAudio?: AudioComponent
+}
+
 export class DeviceDetailPanel {
   private panelRoot: SceneObject
   private indicatorRoot: SceneObject
@@ -29,39 +63,69 @@ export class DeviceDetailPanel {
   private updateScript?: ScriptComponent
   private updateEvent?: UpdateEvent
 
+  // Configuration (assigned from the config object in the constructor).
+  private indicatorPrefab?: ObjectPrefab
+  private indicatorScale: number
+  private indicatorMaterial?: Material
+  private tripleMonitorPrefab?: ObjectPrefab
+  private centerUIScale: number
+  private centerUIOffset: vec3
+  private centerUIRot: vec3
+  private leftUIScale: number
+  private leftUIOffset: vec3
+  private leftUIRot: vec3
+  private rightUIScale: number
+  private rightUIOffset: vec3
+  private rightUIRot: vec3
+  private apiUrlBase: string
+  private shellTerminalPrefab?: ObjectPrefab
+  private shellTerminalScale: number
+  private shellTerminalOffset: vec3
+  private notebookPrefab?: ObjectPrefab
+  private notebookScale: number
+  private notebookOffset: vec3
+  private notebookTitlePos: vec3
+  private notebookTextPos: vec3
+  private notebookCloseBtnPos: vec3
+  public analyzeAudio?: AudioComponent
+  public openAudio?: AudioComponent
+  public selectAudio?: AudioComponent
+
   constructor(
     parentRoot: SceneObject,
     private layer: LayerSet,
     private cameraRoot: SceneObject,
     public device: Device,
     worldPos: vec3,
-    private indicatorPrefab?: ObjectPrefab,
-    private indicatorScale: number = 1.0,
-    private indicatorMaterial?: Material,
-    private tripleMonitorPrefab?: ObjectPrefab,
-    private centerUIScale: number = 0.2,
-    private centerUIOffset: vec3 = new vec3(0, 0, 0),
-    private centerUIRot: vec3 = new vec3(0, 0, 0),
-    private leftUIScale: number = 0.2,
-    private leftUIOffset: vec3 = new vec3(0, 0, 0),
-    private leftUIRot: vec3 = new vec3(0, 0, 0),
-    private rightUIScale: number = 0.2,
-    private rightUIOffset: vec3 = new vec3(0, 0, 0),
-    private rightUIRot: vec3 = new vec3(0, 0, 0),
-    private apiUrlBase: string = "",
-    private shellTerminalPrefab?: ObjectPrefab,
-    private shellTerminalScale: number = 0.02,
-    private shellTerminalOffset: vec3 = new vec3(-15.0, -8.0, 0.0),
-    private notebookPrefab?: ObjectPrefab,
-    private notebookScale: number = 0.16,
-    private notebookOffset: vec3 = new vec3(15.0, -8.0, 0.0),
-    private notebookTitlePos: vec3 = new vec3(-3.5, 17.5, 2.0),
-    private notebookTextPos: vec3 = new vec3(-4.0, -27.0, 2.0),
-    private notebookCloseBtnPos: vec3 = new vec3(-20.0, 17.5, 2.0),
-    public analyzeAudio?: AudioComponent,
-    public openAudio?: AudioComponent,
-    public selectAudio?: AudioComponent
+    config: DeviceDetailPanelConfig
   ) {
+    this.indicatorPrefab = config.indicatorPrefab
+    this.indicatorScale = config.indicatorScale
+    this.indicatorMaterial = config.indicatorMaterial
+    this.tripleMonitorPrefab = config.tripleMonitorPrefab
+    this.centerUIScale = config.centerUIScale
+    this.centerUIOffset = config.centerUIOffset
+    this.centerUIRot = config.centerUIRot
+    this.leftUIScale = config.leftUIScale
+    this.leftUIOffset = config.leftUIOffset
+    this.leftUIRot = config.leftUIRot
+    this.rightUIScale = config.rightUIScale
+    this.rightUIOffset = config.rightUIOffset
+    this.rightUIRot = config.rightUIRot
+    this.apiUrlBase = config.apiUrlBase
+    this.shellTerminalPrefab = config.shellTerminalPrefab
+    this.shellTerminalScale = config.shellTerminalScale
+    this.shellTerminalOffset = config.shellTerminalOffset
+    this.notebookPrefab = config.notebookPrefab
+    this.notebookScale = config.notebookScale
+    this.notebookOffset = config.notebookOffset
+    this.notebookTitlePos = config.notebookTitlePos
+    this.notebookTextPos = config.notebookTextPos
+    this.notebookCloseBtnPos = config.notebookCloseBtnPos
+    this.analyzeAudio = config.analyzeAudio
+    this.openAudio = config.openAudio
+    this.selectAudio = config.selectAudio
+
     // Create the main panel root at the chosen world position
     this.panelRoot = makeObject(parentRoot, layer, `UL_Detail_${device.hostname}`)
     this.panelRoot.getTransform().setWorldPosition(worldPos)
