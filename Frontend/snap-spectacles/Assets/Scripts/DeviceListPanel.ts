@@ -39,6 +39,14 @@ const PANEL_DISTANCE = -140.0
 const PANEL_W = 66.0
 const PANEL_H = 46.0
 
+const DEVICE_MODEL_LAYOUT = {
+  scale: 0.51,
+  phoneScaleMultiplier: 0.4,
+  offsetY: -1.0,
+  phoneOffsetYDelta: -4.0,
+  offsetZ: 13.0
+}
+
 @component
 export class DeviceListPanel extends BaseScriptComponent {
   @input
@@ -81,40 +89,6 @@ export class DeviceListPanel extends BaseScriptComponent {
   tripleMonitorPrefab: ObjectPrefab
 
   @input
-  @hint("Scale multiplier for Center Monitor UI (default 0.2)")
-  centerUIScale: number = 0.2
-  @input
-  @hint("Pos Offset for Center Monitor UI")
-  centerUIOffset: vec3 = new vec3(0, 0, 0)
-  @input
-  @hint("Rot Offset for Center Monitor UI (Degrees)")
-  centerUIRot: vec3 = new vec3(0, 0, 0)
-
-  @input
-  @hint("Scale multiplier for Left Monitor UI (default 0.2)")
-  leftUIScale: number = 0.2
-  @input
-  @hint("Pos Offset for Left Monitor UI")
-  leftUIOffset: vec3 = new vec3(0, 0, 0)
-  @input
-  @hint("Rot Offset for Left Monitor UI (Degrees)")
-  leftUIRot: vec3 = new vec3(0, 0, 0)
-
-  @input
-  @hint("Scale multiplier for Right Monitor UI (default 0.2)")
-  rightUIScale: number = 0.2
-  @input
-  @hint("Pos Offset for Right Monitor UI")
-  rightUIOffset: vec3 = new vec3(0, 0, 0)
-  @input
-  @hint("Rot Offset for Right Monitor UI (Degrees)")
-  rightUIRot: vec3 = new vec3(0, 0, 0)
-
-  @input
-  @hint("Scale multiplier for the indicator prefab")
-  indicatorScale: number = 1.0
-
-  @input
   @allowUndefined
   @hint("Sound when devices finish loading from API")
   loadedAudio: AudioComponent
@@ -145,52 +119,12 @@ export class DeviceListPanel extends BaseScriptComponent {
   indicatorMaterial: Material
 
   @input
-  @hint("Scale multiplier to size the 3D models down to fit the cell")
-  modelScale: number = 0.2
-
-  @input
-  @hint("Y-axis offset to center models vertically in their cell")
-  modelOffsetY: number = 1.5
-
-  @input
-  @hint("Z-axis offset to push models forward out of the screen")
-  modelOffsetZ: number = 4.0
-
-  @input
   @allowUndefined
   shellTerminalPrefab?: ObjectPrefab
 
   @input
-  @hint("Scale multiplier for the shell terminal (default 0.02)")
-  shellTerminalScale: number = 0.02
-
-  @input
-  @hint("Local position offset for the shell terminal")
-  shellTerminalOffset: vec3 = new vec3(-15.0, -8.0, 0.0)
-
-  @input
   @allowUndefined
   notebookPrefab?: ObjectPrefab
-
-  @input
-  @hint("Scale multiplier for the notebook (default 0.16)")
-  notebookScale: number = 0.16
-
-  @input
-  @hint("Local position offset for the notebook")
-  notebookOffset: vec3 = new vec3(-15.0, -8.0, 0.0)
-
-  @input
-  @hint("Local position for notebook Title")
-  notebookTitlePos: vec3 = new vec3(-3.5, 17.5, 2.0)
-
-  @input
-  @hint("Local position for notebook Body text")
-  notebookTextPos: vec3 = new vec3(-4.0, -27.0, 2.0)
-
-  @input
-  @hint("Local position for notebook Close Button")
-  notebookCloseBtnPos: vec3 = new vec3(-16.0, 17.5, 2.0)
 
   public onDeviceReadyToPin: ((device: Device) => void) | null = null
 
@@ -202,8 +136,7 @@ export class DeviceListPanel extends BaseScriptComponent {
   private initialized = false
 
   // Track active detail panels so placing a device again removes its previous instance.
-  // Stays here (not in DeviceStore) because building a DeviceDetailPanel depends on this
-  // component's many @inputs.
+  // Stays here (not in DeviceStore) because panel construction depends on scene assets.
   private activeDetailPanels: Map<string, DeviceDetailPanel> = new Map()
 
   private countText: Text
@@ -448,10 +381,8 @@ export class DeviceListPanel extends BaseScriptComponent {
       const type = guessDeviceType(device)
       const prefab = type === "phone" ? this.phonePrefab : (type === "router" ? this.routerPrefab : this.laptopPrefab)
 
-      // The phone model is a bit too large compared to the others, so we scale it down specifically
-      const finalScale = type === "phone" ? this.modelScale * 0.4 : this.modelScale
-      // Shift the phone down a bit so it sits perfectly in the cell
-      const finalOffsetY = type === "phone" ? this.modelOffsetY - 4.0 : this.modelOffsetY
+      const finalScale = type === "phone" ? DEVICE_MODEL_LAYOUT.scale * DEVICE_MODEL_LAYOUT.phoneScaleMultiplier : DEVICE_MODEL_LAYOUT.scale
+      const finalOffsetY = type === "phone" ? DEVICE_MODEL_LAYOUT.offsetY + DEVICE_MODEL_LAYOUT.phoneOffsetYDelta : DEVICE_MODEL_LAYOUT.offsetY
 
       this.cells.push(
         new Device3DView(
@@ -462,7 +393,7 @@ export class DeviceListPanel extends BaseScriptComponent {
           prefab,
           finalScale,
           finalOffsetY,
-          this.modelOffsetZ,
+          DEVICE_MODEL_LAYOUT.offsetZ,
           (selectedDevice) => {
             if (this.selectAudio) {
               this.selectAudio.play(1)
@@ -551,7 +482,7 @@ export class DeviceListPanel extends BaseScriptComponent {
       this.cameraRoot,
       device,
       prefab,
-      this.modelScale,
+      DEVICE_MODEL_LAYOUT.scale,
       (placer, finalPos) => {
         // Destroy the placer (ghost model)
         placer.destroy()
@@ -638,28 +569,11 @@ export class DeviceListPanel extends BaseScriptComponent {
     const apiUrlBase = HttpClient.deriveBaseUrl(this.websocketUrl)
     return new DeviceDetailPanel(this.sceneObject, this.layer, this.cameraRoot, device, worldPos, {
       indicatorPrefab: this.indicatorPrefab,
-      indicatorScale: this.indicatorScale,
       indicatorMaterial: this.indicatorMaterial,
       tripleMonitorPrefab: this.tripleMonitorPrefab,
-      centerUIScale: this.centerUIScale,
-      centerUIOffset: this.centerUIOffset,
-      centerUIRot: this.centerUIRot,
-      leftUIScale: this.leftUIScale,
-      leftUIOffset: this.leftUIOffset,
-      leftUIRot: this.leftUIRot,
-      rightUIScale: this.rightUIScale,
-      rightUIOffset: this.rightUIOffset,
-      rightUIRot: this.rightUIRot,
       apiUrlBase: apiUrlBase,
       shellTerminalPrefab: this.shellTerminalPrefab,
-      shellTerminalScale: this.shellTerminalScale,
-      shellTerminalOffset: this.shellTerminalOffset,
       notebookPrefab: this.notebookPrefab,
-      notebookScale: this.notebookScale,
-      notebookOffset: this.notebookOffset,
-      notebookTitlePos: this.notebookTitlePos,
-      notebookTextPos: this.notebookTextPos,
-      notebookCloseBtnPos: this.notebookCloseBtnPos,
       analyzeAudio: withAudio ? this.analyzeAudio : undefined,
       openAudio: withAudio ? this.openAudio : undefined,
       selectAudio: withAudio ? this.selectAudio : undefined

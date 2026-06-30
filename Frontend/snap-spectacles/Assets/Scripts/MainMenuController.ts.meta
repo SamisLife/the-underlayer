@@ -32,7 +32,6 @@
     esp32Prefab: false
     scanningAudio: false
     uiTogglePrefab: false
-    worldScanner: false
   ScriptTypesHidden:
     {}
   ReadMe: !<reference> 00000000-0000-0000-0000-000000000000
@@ -44,7 +43,6 @@
   DefaultScriptInputs:
     - cameraRoot: !<reference.SceneObject> 00000000-0000-0000-0000-000000000000
       deviceListPanel: !<reference.ScriptComponent> 00000000-0000-0000-0000-000000000000
-      worldScanner: !<reference.ScriptComponent> 00000000-0000-0000-0000-000000000000
       esp32Prefab: !<reference.ObjectPrefab> 00000000-0000-0000-0000-000000000000
       clickAudio: !<reference.AudioComponent> 00000000-0000-0000-0000-000000000000
       uiTogglePrefab: !<reference.ObjectPrefab> 00000000-0000-0000-0000-000000000000
@@ -55,7 +53,6 @@
   InputLines:
     - '// @input SceneObject cameraRoot {"hint":"The main camera so the menu can follow it"}'
     - '// @input Component.ScriptComponent deviceListPanel {"hint":"Reference to the DeviceListPanel component in the scene"}'
-    - '// @input Component.ScriptComponent worldScanner {"hint":"Optional: Reference to the WorldScannerEffect component"}'
     - '// @input Asset.ObjectPrefab esp32Prefab {"hint":"ESP32 Hologram Prefab"}'
     - '// @input Component.AudioComponent clickAudio {"hint":"Sound for clicking buttons"}'
     - '// @input Asset.ObjectPrefab uiTogglePrefab {"hint":"Snap UI Toggle Prefab for Demo Mode"}'

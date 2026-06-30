@@ -30,11 +30,6 @@ export class MainMenuController extends BaseScriptComponent {
 
   @input
   @allowUndefined
-  @hint("Optional: Reference to the WorldScannerEffect component")
-  worldScanner: ScriptComponent
-  
-  @input
-  @allowUndefined
   @hint("ESP32 Hologram Prefab")
   esp32Prefab: ObjectPrefab
 
@@ -417,8 +412,7 @@ export class MainMenuController extends BaseScriptComponent {
       this.clickAudio.play(1);
     }
 
-    // Own the looping scan sound here, tied to the SCAN state, so it reliably starts and stops
-    // even though WorldScannerEffect may sit on a disabled object whose timers never fire.
+    // Own the looping scan sound here, tied directly to the SCAN state.
     if (this.scanningAudio) {
       if (newState === "SCAN") {
         this.scanningAudio.play(-1)
@@ -445,15 +439,7 @@ export class MainMenuController extends BaseScriptComponent {
       }
     }
 
-    // Trigger the 3D World Scanning effect if the user hits "SCAN"
     if (newState === "SCAN") {
-      if (this.worldScanner) {
-        const scanner = this.worldScanner as unknown as any
-        if (typeof scanner.triggerScan === "function") {
-          scanner.triggerScan()
-        }
-      }
-
       if (dlPanel) {
         const anyDlPanel = dlPanel as any
         if (typeof anyDlPanel.triggerBackendScan === "function") {

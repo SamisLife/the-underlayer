@@ -1406,18 +1406,6 @@
     routerPrefab: true
     indicatorPrefab: true
     tripleMonitorPrefab: true
-    centerUIScale: true
-    centerUIOffset: true
-    centerUIRot: true
-    leftUIScale: true
-    leftUIOffset: true
-    leftUIRot: true
-    rightUIScale: true
-    rightUIOffset: true
-    rightUIRot: true
-    notebookScale: true
-    notebookOffset: true
-    notebookTitlePos: true
   ScriptTypesDefault:
     {}
   ScriptInputs:
@@ -1430,34 +1418,14 @@
       routerPrefab: !<reference.ObjectPrefab> 0fb16f14-9115-49a0-a744-7ec0be0a1211
       indicatorPrefab: !<reference.ObjectPrefab> e15e3147-ce75-4309-a57e-1a0c21ea8c32
       tripleMonitorPrefab: !<reference.ObjectPrefab> f9e7f857-67ab-4b41-892a-1d93fc31853a
-      centerUIScale: 0.200000
-      centerUIOffset: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
-      centerUIRot: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
-      leftUIScale: 0.200000
-      leftUIOffset: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
-      leftUIRot: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
-      rightUIScale: 0.200000
-      rightUIOffset: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
-      rightUIRot: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
-      indicatorScale: !<float> 7.000000
       loadedAudio: !<reference.AudioComponent> b2394b50-397e-4f9f-9a70-68a6a7fcc5f9
       selectAudio: !<reference.AudioComponent> 864e01c8-6369-44e0-99d5-8acca93d88fc
       anchorAudio: !<reference.AudioComponent> 2ecaf0e6-9fa2-4c89-894c-9b4d91e1d281
       openAudio: !<reference.AudioComponent> 9d9b388d-e202-48d4-80d2-ccabcc6cbbe8
       analyzeAudio: !<reference.AudioComponent> b396929d-b0e4-41d4-a535-495713787897
       indicatorMaterial: !<reference.Material> 8ac9b1f8-0e05-4aea-9311-4f4cf267e017
-      modelScale: 0.510000
-      modelOffsetY: !<float> -1.000000
-      modelOffsetZ: !<float> 13.000000
       shellTerminalPrefab: !<reference.ObjectPrefab> 1165d498-ea43-44f6-ac19-b9a99ab8bf78
-      shellTerminalScale: 0.030000
-      shellTerminalOffset: !<Vec3> {x: -32.500000, y: -14.000000, z: 0.000000}
       notebookPrefab: !<reference.ObjectPrefab> 2db30052-9d85-46e1-9385-a473539973c8
-      notebookScale: 0.160000
-      notebookOffset: !<Vec3> {x: -15.000000, y: -8.000000, z: 0.000000}
-      notebookTitlePos: !<Vec3> {x: -3.500000, y: 17.500000, z: 2.000000}
-      notebookTextPos: !<Vec3> {x: -4.000000, y: -25.000000, z: 2.000000}
-      notebookCloseBtnPos: !<Vec3> {x: -13.000000, y: 17.500000, z: 2.000000}
   ScriptTypes:
     "":
       {}
@@ -1722,7 +1690,6 @@
     "":
       cameraRoot: !<reference.SceneObject> 00000000-0000-0065-0000-000000000064
       deviceListPanel: !<reference.ScriptComponent> 81d610c0-cfb1-4fc3-a11f-254805e6875c
-      worldScanner: !<reference.ScriptComponent> d62f3397-95b6-4992-9e78-0646de62e68f
       esp32Prefab: !<reference.ObjectPrefab> be6e30a7-4310-421b-ae87-792ae91ec2f2
       clickAudio: !<reference.AudioComponent> 864e01c8-6369-44e0-99d5-8acca93d88fc
       uiTogglePrefab: !<reference.ObjectPrefab> 3102fe88-6655-4dbb-bfdc-112c94ec59e4

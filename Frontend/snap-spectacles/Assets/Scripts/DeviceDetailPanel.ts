@@ -24,34 +24,17 @@ import {
 import {makeObject, makeText, makePlate, configureButton, stripButtonVisual} from "./UI/UiBuilders"
 
 /**
- * Construction options for DeviceDetailPanel. Built once by DeviceListPanel from its @inputs,
- * so the panel takes one named-and-checked object instead of ~30 positional arguments.
+ * Construction options for DeviceDetailPanel. Built once by DeviceListPanel from asset inputs,
+ * so the panel takes one named-and-checked object instead of positional scene references.
  * Scene/identity essentials (parent, layer, camera, device, world position) stay positional.
  */
 export interface DeviceDetailPanelConfig {
   indicatorPrefab?: ObjectPrefab
-  indicatorScale: number
   indicatorMaterial?: Material
   tripleMonitorPrefab?: ObjectPrefab
-  centerUIScale: number
-  centerUIOffset: vec3
-  centerUIRot: vec3
-  leftUIScale: number
-  leftUIOffset: vec3
-  leftUIRot: vec3
-  rightUIScale: number
-  rightUIOffset: vec3
-  rightUIRot: vec3
   apiUrlBase: string
   shellTerminalPrefab?: ObjectPrefab
-  shellTerminalScale: number
-  shellTerminalOffset: vec3
   notebookPrefab?: ObjectPrefab
-  notebookScale: number
-  notebookOffset: vec3
-  notebookTitlePos: vec3
-  notebookTextPos: vec3
-  notebookCloseBtnPos: vec3
   analyzeAudio?: AudioComponent
   openAudio?: AudioComponent
   selectAudio?: AudioComponent
@@ -74,6 +57,33 @@ interface TripleMonitorLayout {
 type ActionProblem = NonNullable<DeviceSummary["problems"]>[number]
 type PortDisplayItem = OpenPort | number | string
 
+const INDICATOR_PREFAB_SCALE = 7.0
+
+const MONITOR_UI = {
+  centerScale: 0.2,
+  centerOffset: new vec3(0, 0, 0),
+  centerRot: new vec3(0, 0, 0),
+  leftScale: 0.2,
+  leftOffset: new vec3(0, 0, 0),
+  leftRot: new vec3(0, 0, 0),
+  rightScale: 0.2,
+  rightOffset: new vec3(0, 0, 0),
+  rightRot: new vec3(0, 0, 0)
+}
+
+const SHELL_TERMINAL_UI = {
+  scale: 0.03,
+  offset: new vec3(-32.5, -14.0, 0.0)
+}
+
+const NOTEBOOK_UI = {
+  scale: 0.16,
+  offset: new vec3(-15.0, -8.0, 0.0),
+  titlePos: new vec3(-3.5, 17.5, 2.0),
+  textPos: new vec3(-4.0, -25.0, 2.0),
+  closeBtnPos: new vec3(-13.0, 17.5, 2.0)
+}
+
 export class DeviceDetailPanel {
   private panelRoot: SceneObject
   private indicatorRoot: SceneObject
@@ -90,28 +100,11 @@ export class DeviceDetailPanel {
 
   // Configuration (assigned from the config object in the constructor).
   private indicatorPrefab?: ObjectPrefab
-  private indicatorScale: number
   private indicatorMaterial?: Material
   private tripleMonitorPrefab?: ObjectPrefab
-  private centerUIScale: number
-  private centerUIOffset: vec3
-  private centerUIRot: vec3
-  private leftUIScale: number
-  private leftUIOffset: vec3
-  private leftUIRot: vec3
-  private rightUIScale: number
-  private rightUIOffset: vec3
-  private rightUIRot: vec3
   private apiUrlBase: string
   private shellTerminalPrefab?: ObjectPrefab
-  private shellTerminalScale: number
-  private shellTerminalOffset: vec3
   private notebookPrefab?: ObjectPrefab
-  private notebookScale: number
-  private notebookOffset: vec3
-  private notebookTitlePos: vec3
-  private notebookTextPos: vec3
-  private notebookCloseBtnPos: vec3
   public analyzeAudio?: AudioComponent
   public openAudio?: AudioComponent
   public selectAudio?: AudioComponent
@@ -125,28 +118,11 @@ export class DeviceDetailPanel {
     config: DeviceDetailPanelConfig
   ) {
     this.indicatorPrefab = config.indicatorPrefab
-    this.indicatorScale = config.indicatorScale
     this.indicatorMaterial = config.indicatorMaterial
     this.tripleMonitorPrefab = config.tripleMonitorPrefab
-    this.centerUIScale = config.centerUIScale
-    this.centerUIOffset = config.centerUIOffset
-    this.centerUIRot = config.centerUIRot
-    this.leftUIScale = config.leftUIScale
-    this.leftUIOffset = config.leftUIOffset
-    this.leftUIRot = config.leftUIRot
-    this.rightUIScale = config.rightUIScale
-    this.rightUIOffset = config.rightUIOffset
-    this.rightUIRot = config.rightUIRot
     this.apiUrlBase = config.apiUrlBase
     this.shellTerminalPrefab = config.shellTerminalPrefab
-    this.shellTerminalScale = config.shellTerminalScale
-    this.shellTerminalOffset = config.shellTerminalOffset
     this.notebookPrefab = config.notebookPrefab
-    this.notebookScale = config.notebookScale
-    this.notebookOffset = config.notebookOffset
-    this.notebookTitlePos = config.notebookTitlePos
-    this.notebookTextPos = config.notebookTextPos
-    this.notebookCloseBtnPos = config.notebookCloseBtnPos
     this.analyzeAudio = config.analyzeAudio
     this.openAudio = config.openAudio
     this.selectAudio = config.selectAudio
@@ -172,7 +148,7 @@ export class DeviceDetailPanel {
     this.indicatorRoot = makeObject(this.panelRoot, this.layer, "Indicator_Root", new vec3(0, this.indicatorBaseY, 0))
     if (this.indicatorPrefab) {
       const indMesh = this.indicatorPrefab.instantiate(this.indicatorRoot)
-      indMesh.getTransform().setLocalScale(new vec3(this.indicatorScale, this.indicatorScale, this.indicatorScale))
+      indMesh.getTransform().setLocalScale(new vec3(INDICATOR_PREFAB_SCALE, INDICATOR_PREFAB_SCALE, INDICATOR_PREFAB_SCALE))
       if (this.indicatorMaterial) this.applyMaterialRecursive(indMesh, this.indicatorMaterial)
     } else {
       makePlate(this.indicatorRoot, this.layer, "IndBg", new vec2(8.0, 8.0), vec3.zero(), new vec4(0.2, 0, 0, 0.8), 4.0, new vec4(1, 0, 0, 1), 0.5, 2.0)
@@ -198,8 +174,8 @@ export class DeviceDetailPanel {
       
       // UI is parented to uiRoot (Y-up, +Z toward camera) not to meshObj, so it avoids
       // the FBX importer's -90° X correction and is never "sleeping on its back".
-      // uiRoot world scale is ~1.0, so no invScale is needed; centerUIScale / leftUIScale /
-      // rightUIScale directly control the layout dimensions.
+      // uiRoot world scale is ~1.0, so no invScale is needed; MONITOR_UI scale values
+      // directly control the layout dimensions.
       this.uiScaledRoot = makeObject(this.uiRoot, this.layer, "UIScaledRoot", vec3.zero())
       this.buildTripleMonitors(this.uiScaledRoot)
     } else {
@@ -286,7 +262,7 @@ export class DeviceDetailPanel {
       sideAngle: 35 * Math.PI / 180,
       sideGap: 4,
       textScale: 4.5,
-      centerScale: this.centerUIScale
+      centerScale: MONITOR_UI.centerScale
     }
 
     const cves = this.device.ar_summary?.cveCount || 0
@@ -314,15 +290,15 @@ export class DeviceDetailPanel {
     const c_z_face = (c_d / 2) - (layout.screenRecess * SC_C) + (2.0 * SC_C)
     const centerBasePos = new vec3(0, 0, c_z_face)
     const centerPos = new vec3(
-      centerBasePos.x + this.centerUIOffset.x,
-      centerBasePos.y + this.centerUIOffset.y,
-      centerBasePos.z + this.centerUIOffset.z
+      centerBasePos.x + MONITOR_UI.centerOffset.x,
+      centerBasePos.y + MONITOR_UI.centerOffset.y,
+      centerBasePos.z + MONITOR_UI.centerOffset.z
     )
     const centerRoot = makeObject(scaledRoot, this.layer, "CenterMonitor", centerPos)
     centerRoot.getTransform().setLocalRotation(quat.fromEulerVec(new vec3(
-      this.centerUIRot.x * Math.PI/180,
-      this.centerUIRot.y * Math.PI/180,
-      this.centerUIRot.z * Math.PI/180
+      MONITOR_UI.centerRot.x * Math.PI/180,
+      MONITOR_UI.centerRot.y * Math.PI/180,
+      MONITOR_UI.centerRot.z * Math.PI/180
     )))
 
     this.centerRoot = centerRoot
@@ -390,7 +366,7 @@ export class DeviceDetailPanel {
     problems: ActionProblem[]
   ): void {
     const SC_C = layout.centerScale
-    const SC_R = this.rightUIScale
+    const SC_R = MONITOR_UI.rightScale
     const TS = layout.textScale
     const r_s_w = layout.baseSideWidth * SC_R
     const r_s_h = layout.baseSideHeight * SC_R
@@ -402,12 +378,12 @@ export class DeviceDetailPanel {
     rightPivot.getTransform().setLocalRotation(quat.fromEulerVec(new vec3(0, -layout.sideAngle, 0)))
 
     const rBasePos = new vec3(r_s_w / 2, 0, r_s_z_face)
-    const rightPos = new vec3(rBasePos.x + this.rightUIOffset.x, rBasePos.y + this.rightUIOffset.y, rBasePos.z + this.rightUIOffset.z)
+    const rightPos = new vec3(rBasePos.x + MONITOR_UI.rightOffset.x, rBasePos.y + MONITOR_UI.rightOffset.y, rBasePos.z + MONITOR_UI.rightOffset.z)
     const rightRoot = makeObject(rightPivot, this.layer, "RightMonitor", rightPos)
     rightRoot.getTransform().setLocalRotation(quat.fromEulerVec(new vec3(
-      this.rightUIRot.x * Math.PI/180,
-      this.rightUIRot.y * Math.PI/180,
-      this.rightUIRot.z * Math.PI/180
+      MONITOR_UI.rightRot.x * Math.PI/180,
+      MONITOR_UI.rightRot.y * Math.PI/180,
+      MONITOR_UI.rightRot.z * Math.PI/180
     )))
 
     this.rightRoot = rightRoot
@@ -509,7 +485,7 @@ export class DeviceDetailPanel {
     problems: ActionProblem[]
   ): void {
     const SC_C = layout.centerScale
-    const SC_L = this.leftUIScale
+    const SC_L = MONITOR_UI.leftScale
     const TS = layout.textScale
     const l_s_w = layout.baseSideWidth * SC_L
     const l_s_h = layout.baseSideHeight * SC_L
@@ -521,12 +497,12 @@ export class DeviceDetailPanel {
     leftPivot.getTransform().setLocalRotation(quat.fromEulerVec(new vec3(0, layout.sideAngle, 0)))
 
     const lBasePos = new vec3(-l_s_w / 2, 0, l_s_z_face)
-    const leftPos = new vec3(lBasePos.x + this.leftUIOffset.x, lBasePos.y + this.leftUIOffset.y, lBasePos.z + this.leftUIOffset.z)
+    const leftPos = new vec3(lBasePos.x + MONITOR_UI.leftOffset.x, lBasePos.y + MONITOR_UI.leftOffset.y, lBasePos.z + MONITOR_UI.leftOffset.z)
     const leftRoot = makeObject(leftPivot, this.layer, "LeftMonitor", leftPos)
     leftRoot.getTransform().setLocalRotation(quat.fromEulerVec(new vec3(
-      this.leftUIRot.x * Math.PI/180,
-      this.leftUIRot.y * Math.PI/180,
-      this.leftUIRot.z * Math.PI/180
+      MONITOR_UI.leftRot.x * Math.PI/180,
+      MONITOR_UI.leftRot.y * Math.PI/180,
+      MONITOR_UI.leftRot.z * Math.PI/180
     )))
 
     this.leftRoot = leftRoot
@@ -760,8 +736,8 @@ export class DeviceDetailPanel {
       const terminalInstance = this.shellTerminalPrefab.instantiate(popupRoot)
       
       // Apply the user-defined configurable parameters from Lens Studio properties!
-      terminalInstance.getTransform().setLocalPosition(this.shellTerminalOffset)
-      terminalInstance.getTransform().setLocalScale(new vec3(this.shellTerminalScale, this.shellTerminalScale, this.shellTerminalScale)) 
+      terminalInstance.getTransform().setLocalPosition(SHELL_TERMINAL_UI.offset)
+      terminalInstance.getTransform().setLocalScale(new vec3(SHELL_TERMINAL_UI.scale, SHELL_TERMINAL_UI.scale, SHELL_TERMINAL_UI.scale))
       
       const C_GLOW_GREEN = new vec4(0.0, 1.0, 0.25, 1.0)
       const C_GLOW_DIM = new vec4(0.0, 0.6, 0.15, 1.0)
@@ -873,8 +849,8 @@ export class DeviceDetailPanel {
 
     if (this.notebookPrefab) {
       const nbInstance = this.notebookPrefab.instantiate(this.notebookRoot);
-      nbInstance.getTransform().setLocalPosition(this.notebookOffset);
-      nbInstance.getTransform().setLocalScale(new vec3(this.notebookScale, this.notebookScale, this.notebookScale));
+      nbInstance.getTransform().setLocalPosition(NOTEBOOK_UI.offset);
+      nbInstance.getTransform().setLocalScale(new vec3(NOTEBOOK_UI.scale, NOTEBOOK_UI.scale, NOTEBOOK_UI.scale));
       uiNode = makeObject(this.notebookRoot, this.layer, "NotebookUINode", vec3.zero());
     } else {
       makePlate(this.notebookRoot, this.layer, "Bg", new vec2(50.0, 40.0), vec3.zero(), new vec4(0, 0, 0, 0.95), 5.0, C_CYAN, 0.5, 0);
@@ -884,13 +860,13 @@ export class DeviceDetailPanel {
     const C_GLOW_GREEN = new vec4(0.0, 1.0, 0.25, 1.0);
     
     // Position text in the exact same screen region as the Shell Terminal
-    const titleTxt = makeText(uiNode, this.layer, "NTitle", `[ INFO: ${topic.toUpperCase()} ]`, FS_SMALL, C_GLOW_GREEN, this.notebookTitlePos, 22.0, 10.0, HorizontalAlignment.Center);
+    const titleTxt = makeText(uiNode, this.layer, "NTitle", `[ INFO: ${topic.toUpperCase()} ]`, FS_SMALL, C_GLOW_GREEN, NOTEBOOK_UI.titlePos, 22.0, 10.0, HorizontalAlignment.Center);
     
     // Height is 80.0. With VerticalAlignment.Top, text starts at y + (height/2).
-    const bodyTxt = makeText(uiNode, this.layer, "NBody", "LOADING...", FS_SMALL, C_WHITE, this.notebookTextPos, 16.0, 80.0, HorizontalAlignment.Left, 30, true, VerticalAlignment.Top);
+    const bodyTxt = makeText(uiNode, this.layer, "NBody", "LOADING...", FS_SMALL, C_WHITE, NOTEBOOK_UI.textPos, 16.0, 80.0, HorizontalAlignment.Left, 30, true, VerticalAlignment.Top);
 
     // Minimalist, sophisticated close button at top-left
-    const closeBtnRoot = makeObject(uiNode, this.layer, "NCloseBtn", this.notebookCloseBtnPos);
+    const closeBtnRoot = makeObject(uiNode, this.layer, "NCloseBtn", NOTEBOOK_UI.closeBtnPos);
     
     // Explicit red circular background plate
     const bgPlate = makePlate(closeBtnRoot, this.layer, "CBg", new vec2(1.5, 1.5), new vec3(0, 0, 0.0), new vec4(0.8, 0.1, 0.1, 1.0), 30, undefined, 0, 0.75);
@@ -1056,7 +1032,7 @@ export class DeviceDetailPanel {
           
           // Animate the chunk beautifully along the same Bezier curve used to draw the tube
           // The progress goes from 0 (bottom) to 1 (top)
-          const SC_C = this.centerUIScale
+          const SC_C = MONITOR_UI.centerScale
           const c_h = 145 * SC_C // BASE_c_h * SC_C
           const curvePos = this.getTubeCurve(chunk.tubeIndex, chunk.progress, SC_C, c_h)
           
@@ -1098,7 +1074,7 @@ export class DeviceDetailPanel {
         const node = this.orbitingNodes[i];
         const offset = i * (Math.PI / 3);
         const t = time * 2.0 + offset;
-        const r = 40.0 * this.leftUIScale;
+        const r = 40.0 * MONITOR_UI.leftScale;
         node.getTransform().setLocalPosition(new vec3(Math.cos(t) * r, Math.sin(t) * r, 0));
       }
     }
