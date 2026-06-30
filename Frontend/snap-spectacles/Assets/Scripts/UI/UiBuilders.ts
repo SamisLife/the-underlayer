@@ -6,6 +6,8 @@
  */
 
 import {RoundedRectangle} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangle"
+import {RectangleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/RectangleButton"
+import {RoundedRectangleVisual} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangleVisual"
 import {getActiveHudFont} from "./Theme"
 
 export function makeObject(
@@ -95,4 +97,26 @@ export function makePlate(
     plate.borderSize = borderSize
   }
   return plate
+}
+
+export function configureButton(btn: RectangleButton, defaultColor: vec4, onTap: () => void): void {
+  btn.onTriggerUp.add(onTap)
+  const visual = btn.visual as RoundedRectangleVisual
+  if (visual) {
+    visual.shouldColorChange = true
+    visual.baseDefaultColor = defaultColor
+    visual.baseHoveredColor = new vec4(
+      defaultColor.r + 0.1,
+      defaultColor.g + 0.1,
+      defaultColor.b + 0.1,
+      defaultColor.a + 0.2
+    )
+    visual.baseTriggeredColor = new vec4(
+      defaultColor.r + 0.2,
+      defaultColor.g + 0.2,
+      defaultColor.b + 0.2,
+      defaultColor.a + 0.4
+    )
+    visual.defaultHasBorder = false
+  }
 }

@@ -7,7 +7,6 @@
  */
 
 import {RectangleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/RectangleButton"
-import {RoundedRectangleVisual} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangleVisual"
 import {Interactable} from "SpectaclesInteractionKit.lspkg/Components/Interaction/Interactable/Interactable"
 import {TargetingMode} from "SpectaclesInteractionKit.lspkg/Core/Interactor/Interactor"
 import {Device} from "./Data/DeviceTypes"
@@ -22,7 +21,7 @@ import {
   threatColor,
   priorityColor
 } from "./UI/Theme"
-import {makeObject, makeText, makePlate} from "./UI/UiBuilders"
+import {makeObject, makeText, makePlate, configureButton} from "./UI/UiBuilders"
 
 /**
  * Construction options for DeviceDetailPanel. Built once by DeviceListPanel from its @inputs,
@@ -926,18 +925,10 @@ export class DeviceDetailPanel {
   }
 
   private configureBtn(btn: RectangleButton, defaultColor: vec4, tapCallback: () => void): void {
-    btn.onTriggerUp.add(() => {
+    configureButton(btn, defaultColor, () => {
       if (this.selectAudio) this.selectAudio.play(1)
       tapCallback()
     })
-    const visual = btn.visual as RoundedRectangleVisual
-    if (visual) {
-      visual.shouldColorChange = true
-      visual.baseDefaultColor = defaultColor
-      visual.baseHoveredColor = new vec4(defaultColor.r + 0.1, defaultColor.g + 0.1, defaultColor.b + 0.1, defaultColor.a + 0.2)
-      visual.baseTriggeredColor = new vec4(defaultColor.r + 0.2, defaultColor.g + 0.2, defaultColor.b + 0.2, defaultColor.a + 0.4)
-      visual.defaultHasBorder = false
-    }
   }
 
   public setExpanded(expanded: boolean): void {

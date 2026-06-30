@@ -10,7 +10,7 @@ import {RoundedRectangleVisual} from "SpectaclesUIKit.lspkg/Scripts/Visuals/Roun
 import {Interactable} from "SpectaclesInteractionKit.lspkg/Components/Interaction/Interactable/Interactable"
 import {TargetingMode} from "SpectaclesInteractionKit.lspkg/Core/Interactor/Interactor"
 import {DeviceListPanel} from "./DeviceListPanel"
-import {makeObject, makePlate, makeText} from "./UI/UiBuilders"
+import {makeObject, makePlate, makeText, configureButton} from "./UI/UiBuilders"
 import {C_CYAN, C_DIM, C_WHITE, FS_TITLE, FS_SMALL} from "./UI/Theme"
 import {DemoState} from "./Data/DeviceTypes"
 import {lerp} from "SpectaclesInteractionKit.lspkg/Utils/mathUtils"
@@ -226,7 +226,7 @@ export class MainMenuController extends BaseScriptComponent {
     demoBtn.size = new vec3(15.0, 4.0, 2.0)
     demoBtn.initialize()
 
-    this.configureBtn(demoBtn, new vec4(0.1, 0.1, 0.1, 0.0), C_CYAN, () => {
+    this.configureBtn(demoBtn, new vec4(0.1, 0.1, 0.1, 0.0), () => {
       DemoState.isDemoMode = !DemoState.isDemoMode
       demoTxt.text = DemoState.isDemoMode ? "[X] DEMO MODE" : "[ ] DEMO MODE"
       demoTxt.textFill.color = DemoState.isDemoMode ? C_CYAN : C_DIM
@@ -239,16 +239,8 @@ export class MainMenuController extends BaseScriptComponent {
     })
   }
 
-  private configureBtn(btn: RectangleButton, defaultColor: vec4, borderColor: vec4, tapCallback: () => void): void {
-    btn.onTriggerUp.add(tapCallback)
-    const visual = btn.visual as RoundedRectangleVisual
-    if (visual) {
-      visual.shouldColorChange = true
-      visual.baseDefaultColor = defaultColor
-      visual.baseHoveredColor = new vec4(defaultColor.r + 0.1, defaultColor.g + 0.1, defaultColor.b + 0.1, defaultColor.a + 0.2)
-      visual.baseTriggeredColor = new vec4(defaultColor.r + 0.2, defaultColor.g + 0.2, defaultColor.b + 0.2, defaultColor.a + 0.4)
-      visual.defaultHasBorder = false
-    }
+  private configureBtn(btn: RectangleButton, defaultColor: vec4, tapCallback: () => void): void {
+    configureButton(btn, defaultColor, tapCallback)
   }
 
   private buildMinimizedMenu(): void {
@@ -261,7 +253,7 @@ export class MainMenuController extends BaseScriptComponent {
     btn.size = new vec3(20.0, 6.0, 2.0)
     btn.initialize()
     
-    this.configureBtn(btn, C_DIM, C_CYAN, () => this.switchState("EXPANDED"))
+    this.configureBtn(btn, C_DIM, () => this.switchState("EXPANDED"))
   }
 
   private createWireframe(parent: SceneObject, name: string, color: vec4): { root: SceneObject, plate: any } {
@@ -308,7 +300,7 @@ export class MainMenuController extends BaseScriptComponent {
     const scanBtn = this.scanBtnRoot.createComponent(RectangleButton.getTypeName()) as RectangleButton
     scanBtn.size = new vec3(14.0, 6.0, 2.0)
     scanBtn.initialize()
-    this.configureBtn(scanBtn, C_DIM, C_WHITE, () => this.switchState("SCAN"))
+    this.configureBtn(scanBtn, C_DIM, () => this.switchState("SCAN"))
 
     // DEVICES BUTTON
     this.devBtnRoot = makeObject(this.expandedContainer, this.layer, "Btn_Devices", vec3.zero())
@@ -320,7 +312,7 @@ export class MainMenuController extends BaseScriptComponent {
     const devBtn = this.devBtnRoot.createComponent(RectangleButton.getTypeName()) as RectangleButton
     devBtn.size = new vec3(14.0, 6.0, 2.0)
     devBtn.initialize()
-    this.configureBtn(devBtn, C_DIM, C_CYAN, () => this.switchState("DEVICES"))
+    this.configureBtn(devBtn, C_DIM, () => this.switchState("DEVICES"))
 
     // CLOSE BUTTON
     this.expandedCloseBtnRoot = makeObject(this.expandedContainer, this.layer, "Btn_Close", vec3.zero())
@@ -330,7 +322,7 @@ export class MainMenuController extends BaseScriptComponent {
     const closeBtn = this.expandedCloseBtnRoot.createComponent(RectangleButton.getTypeName()) as RectangleButton
     closeBtn.size = new vec3(6.0, 4.0, 2.0)
     closeBtn.initialize()
-    this.configureBtn(closeBtn, new vec4(0.2, 0.05, 0.05, 0.8), new vec4(1, 0, 0, 1), () => this.switchState("MINIMIZED"))
+    this.configureBtn(closeBtn, new vec4(0.2, 0.05, 0.05, 0.8), () => this.switchState("MINIMIZED"))
   }
 
   private buildScanMenu(): void {
@@ -368,7 +360,7 @@ export class MainMenuController extends BaseScriptComponent {
     const backBtn = backRoot.createComponent(RectangleButton.getTypeName()) as RectangleButton
     backBtn.size = new vec3(12.0, 4.0, 2.0)
     backBtn.initialize()
-    this.configureBtn(backBtn, C_DIM, C_WHITE, () => this.switchState("EXPANDED"))
+    this.configureBtn(backBtn, C_DIM, () => this.switchState("EXPANDED"))
   }
 
   private buildDevicesBackMenu(): void {
@@ -381,7 +373,7 @@ export class MainMenuController extends BaseScriptComponent {
     const closeBtn = closeRoot.createComponent(RectangleButton.getTypeName()) as RectangleButton
     closeBtn.size = new vec3(6.0, 4.0, 2.0)
     closeBtn.initialize()
-    this.configureBtn(closeBtn, new vec4(0.2, 0.05, 0.05, 0.8), new vec4(1, 0, 0, 1), () => this.switchState("EXPANDED"))
+    this.configureBtn(closeBtn, new vec4(0.2, 0.05, 0.05, 0.8), () => this.switchState("EXPANDED"))
   }
 
   private switchState(newState: "MINIMIZED" | "EXPANDED" | "SCAN" | "DEVICES"): void {
