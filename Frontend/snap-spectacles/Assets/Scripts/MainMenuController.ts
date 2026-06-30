@@ -146,30 +146,11 @@ export class MainMenuController extends BaseScriptComponent {
       const interactable = clickerRoot.createComponent(Interactable.getTypeName()) as Interactable
       interactable.targetingMode = TargetingMode.All
 
-      let toggleScript: any = null
-      let nativelyBound = false
-      const scripts = toggleObj.getComponents("Component.ScriptComponent") as ScriptComponent[]
-      for (let i = 0; i < scripts.length; i++) {
-        const s = scripts[i] as any
-        if (s.onValueChange || s.onStateChanged || s.toggle || (s.api && s.api.toggle)) {
-          toggleScript = s
-        }
-        
-        // Always listen to the native toggle events in case the user clicks the toggle's own hitbox!
-        if (s.onValueChange && typeof s.onValueChange.add === "function") {
-          s.onValueChange.add((isOn: boolean) => {
-            DemoState.isDemoMode = isOn
-            demoTxt.textFill.color = isOn ? C_CYAN : C_DIM
-          })
-          nativelyBound = true
-        } else if (s.onStateChanged && typeof s.onStateChanged.add === "function") {
-          s.onStateChanged.add((isOn: boolean) => {
-            DemoState.isDemoMode = isOn
-            demoTxt.textFill.color = isOn ? C_CYAN : C_DIM
-          })
-          nativelyBound = true
-        }
-      }
+      // The toggle is an imported/package prefab, and different copies expose slightly
+      // different public script APIs. Keep the probing in named helpers so the scene can
+      // tolerate prefab swaps while the menu logic stays readable.
+      const toggleScript = this.findToggleScript(toggleObj)
+      const nativelyBound = this.bindToggleChangeEvents(toggleObj, demoTxt)
 
       // Force the Toggle prefab's visual state to match our code's default DemoState (false)
       // MUST BE DEFERRED to prevent SIK lifecycle race conditions overriding our command!
@@ -180,15 +161,8 @@ export class MainMenuController extends BaseScriptComponent {
              if (!hasSynced) {
                  hasSynced = true
                  
-                 // Now that SIK is fully initialized, force the visual state to match our code
-                 if (typeof toggleScript.toggle === "function") {
-                     // If it exposes isToggledOn, ensure we don't double-toggle if it's already in the correct state
-                     const currentlyOn = ('isToggledOn' in toggleScript) ? toggleScript.isToggledOn : true
-                     if (currentlyOn !== DemoState.isDemoMode) toggleScript.toggle()
-                 }
-                 else if (typeof toggleScript.setState === "function") toggleScript.setState(DemoState.isDemoMode)
-                 else if (toggleScript.api && typeof toggleScript.api.setState === "function") toggleScript.api.setState(DemoState.isDemoMode)
-                 else if ('isToggledOn' in toggleScript) toggleScript.isToggledOn = DemoState.isDemoMode
+                 // Now that SIK is fully initialized, force the visual state to match our code.
+                 this.setToggleScriptState(toggleScript, DemoState.isDemoMode)
                  
                  // Remove this event so it only runs once
                  this.removeEvent(syncEvent)
@@ -199,10 +173,7 @@ export class MainMenuController extends BaseScriptComponent {
       interactable.onTriggerEnd.add(() => {
         if (toggleScript) {
            // We ask the toggle script to flip. Its event handler will update DemoState for us!
-           if (typeof toggleScript.toggle === "function") toggleScript.toggle()
-           else if (toggleScript.api && typeof toggleScript.api.toggle === "function") toggleScript.api.toggle()
-           else if (typeof toggleScript.setState === "function") toggleScript.setState(!DemoState.isDemoMode)
-           else if (toggleScript.api && typeof toggleScript.api.setState === "function") toggleScript.api.setState(!DemoState.isDemoMode)
+           this.flipToggleScript(toggleScript)
         }
         
         // If we somehow failed to bind natively, fallback to manual state sync
@@ -237,6 +208,71 @@ export class MainMenuController extends BaseScriptComponent {
          v.baseTriggeredColor = new vec4(v.baseDefaultColor.r + 0.2, v.baseDefaultColor.g + 0.2, v.baseDefaultColor.b + 0.8, 1.0)
       }
     })
+  }
+
+  private findToggleScript(toggleObj: SceneObject): any {
+    const scripts = toggleObj.getComponents("Component.ScriptComponent") as ScriptComponent[]
+    for (let i = 0; i < scripts.length; i++) {
+      const script = scripts[i] as any
+      if (
+        script.onValueChange ||
+        script.onStateChanged ||
+        script.toggle ||
+        script.setState ||
+        (script.api && (script.api.toggle || script.api.setState)) ||
+        "isToggledOn" in script
+      ) {
+        return script
+      }
+    }
+    return null
+  }
+
+  private bindToggleChangeEvents(toggleObj: SceneObject, demoTxt: Text): boolean {
+    let bound = false
+    const scripts = toggleObj.getComponents("Component.ScriptComponent") as ScriptComponent[]
+    for (let i = 0; i < scripts.length; i++) {
+      const script = scripts[i] as any
+      const onChanged = (isOn: boolean) => {
+        DemoState.isDemoMode = isOn
+        demoTxt.textFill.color = isOn ? C_CYAN : C_DIM
+      }
+
+      // Listen to the prefab's own events too, in case the user taps its native hitbox.
+      if (script.onValueChange && typeof script.onValueChange.add === "function") {
+        script.onValueChange.add(onChanged)
+        bound = true
+      } else if (script.onStateChanged && typeof script.onStateChanged.add === "function") {
+        script.onStateChanged.add(onChanged)
+        bound = true
+      }
+    }
+    return bound
+  }
+
+  private setToggleScriptState(toggleScript: any, isOn: boolean): void {
+    if (!toggleScript) return
+    if (typeof toggleScript.toggle === "function") {
+      const currentlyOn = ("isToggledOn" in toggleScript) ? toggleScript.isToggledOn : true
+      if (currentlyOn !== isOn) toggleScript.toggle()
+    } else if (typeof toggleScript.setState === "function") {
+      toggleScript.setState(isOn)
+    } else if (toggleScript.api && typeof toggleScript.api.setState === "function") {
+      toggleScript.api.setState(isOn)
+    } else if ("isToggledOn" in toggleScript) {
+      toggleScript.isToggledOn = isOn
+    }
+  }
+
+  private flipToggleScript(toggleScript: any): void {
+    if (!toggleScript) return
+    if (typeof toggleScript.toggle === "function") {
+      toggleScript.toggle()
+    } else if (toggleScript.api && typeof toggleScript.api.toggle === "function") {
+      toggleScript.api.toggle()
+    } else {
+      this.setToggleScriptState(toggleScript, !DemoState.isDemoMode)
+    }
   }
 
   private configureBtn(btn: RectangleButton, defaultColor: vec4, tapCallback: () => void): void {
