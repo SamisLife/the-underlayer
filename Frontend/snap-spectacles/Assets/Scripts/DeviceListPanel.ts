@@ -24,10 +24,8 @@ import {
   C_CYAN,
   C_CYAN_DIM,
   C_WHITE,
-  C_CRITICAL,
   FS_TITLE,
-  FS_SMALL,
-  FS_TINY
+  FS_SMALL
 } from "./UI/Theme"
 import {makeObject, makePlate, makeText} from "./UI/UiBuilders"
 import {Device3DView} from "./UI/Device3DView"
@@ -193,7 +191,6 @@ export class DeviceListPanel extends BaseScriptComponent {
 
       this.buildWireframeOutline()
       this.buildHeader()
-      this.buildDataRain()
 
       this.listRoot = makeObject(this.panelRoot, this.layer, "UL_Grid", new vec3(0, 0, 0.6))
 
@@ -305,69 +302,6 @@ export class DeviceListPanel extends BaseScriptComponent {
       "0 ENTITIES", FS_SMALL, C_CYAN,
       new vec3(PANEL_W/2 - 8.0, 0, 0), 20.0, 8.0, HorizontalAlignment.Right
     )
-  }
-
-  private buildDataRain(): void {
-    const maxParticles = 40
-    const particles: { text: Text, x: number, y: number, life: number, speed: number }[] = []
-
-    // We attach the rain directly to the panelRoot so it spans the entire UI
-    for (let i = 0; i < maxParticles; i++) {
-      const pText = makeText(this.panelRoot, this.layer, `UL_Rain_${i}`, "", FS_TINY, C_CRITICAL, vec3.zero(), 10.0, 4.0)
-      pText.enabled = false
-      particles.push({ text: pText, x: 0, y: 0, life: 0, speed: 0 })
-    }
-
-    const script = this.panelRoot.createComponent("Component.ScriptComponent") as ScriptComponent
-    const rainEvent = script.createEvent("UpdateEvent") as UpdateEvent
-    rainEvent.bind(() => {
-      const dt = getDeltaTime()
-
-      // Randomly spawn multiple particles per frame for a heavy data rain effect
-      if (Math.random() < 0.6) {
-        const p = particles.find(pt => pt.life <= 0)
-        if (p) {
-          p.life = 2.0 + Math.random() * 3.0
-          p.speed = 6.0 + Math.random() * 8.0
-          // Spread randomly across the width of the panel
-          p.x = (Math.random() - 0.5) * PANEL_W
-          // Start at the bottom of the panel
-          p.y = -PANEL_H / 2 - 2.0
-          // Random Z depth so they float in front and behind models
-          const zDepth = (Math.random() - 0.5) * 8.0
-
-          p.text.text = `0x${Math.floor(Math.random()*65535).toString(16).toUpperCase()}`
-          p.text.enabled = true
-          p.text.getSceneObject().getTransform().setLocalPosition(new vec3(p.x, p.y, zDepth))
-        }
-      }
-
-      particles.forEach(p => {
-        if (p.life > 0) {
-          p.life -= dt
-          // Chaotic speed: sometimes they burst up quickly
-          const currentSpeed = p.speed * (Math.random() > 0.85 ? 4.0 : 1.0)
-          p.y += dt * currentSpeed // float up
-
-          // Chaotic horizontal glitch
-          const glitchX = p.x + (Math.random() > 0.9 ? (Math.random() - 0.5) * 3.0 : 0)
-
-          // Preserve their initial Z depth as they float up
-          const currentZ = p.text.getSceneObject().getTransform().getLocalPosition().z
-          p.text.getSceneObject().getTransform().setLocalPosition(new vec3(glitchX, p.y, currentZ))
-
-          // Chaotic text swapping: occasionally change the hex code mid-flight
-          if (Math.random() > 0.92) {
-            p.text.text = `0x${Math.floor(Math.random()*65535).toString(16).toUpperCase()}`
-          }
-
-          // Chaotic flickering: randomize alpha heavily
-          const flickerAlpha = Math.min(1.0, p.life) * (Math.random() > 0.8 ? 0.1 : 0.8)
-          p.text.textFill.color = new vec4(C_CRITICAL.x, C_CRITICAL.y, C_CRITICAL.z, flickerAlpha)
-          if (p.life <= 0) p.text.enabled = false
-        }
-      })
-    })
   }
 
   private rebuildList(): void {
