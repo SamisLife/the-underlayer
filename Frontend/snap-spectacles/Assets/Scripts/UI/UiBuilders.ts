@@ -120,3 +120,15 @@ export function configureButton(btn: RectangleButton, defaultColor: vec4, onTap:
     visual.defaultHasBorder = false
   }
 }
+
+export function stripButtonVisual(btn: RectangleButton): void {
+  if (!btn.visual) return
+  const visual = btn.visual as any
+  if (typeof visual.destroy === "function") {
+    visual.destroy()
+  } else if (visual.getSceneObject) {
+    visual.getSceneObject().destroy()
+  } else if (visual.sceneObject) {
+    visual.sceneObject.destroy()
+  }
+}

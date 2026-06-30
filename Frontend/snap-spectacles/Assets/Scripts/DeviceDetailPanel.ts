@@ -21,7 +21,7 @@ import {
   threatColor,
   priorityColor
 } from "./UI/Theme"
-import {makeObject, makeText, makePlate, configureButton} from "./UI/UiBuilders"
+import {makeObject, makeText, makePlate, configureButton, stripButtonVisual} from "./UI/UiBuilders"
 
 /**
  * Construction options for DeviceDetailPanel. Built once by DeviceListPanel from its @inputs,
@@ -165,12 +165,7 @@ export class DeviceDetailPanel {
     const indBtn = this.indicatorRoot.createComponent(RectangleButton.getTypeName()) as RectangleButton
     indBtn.size = new vec3(10.0, 10.0, 10.0)
     indBtn.initialize()
-    if (indBtn.visual) {
-      const v = indBtn.visual as any
-      if (typeof v.destroy === 'function') v.destroy()
-      else if (v.getSceneObject) v.getSceneObject().destroy()
-      else if (v.sceneObject) v.sceneObject.destroy()
-    }
+    stripButtonVisual(indBtn)
     indBtn.onTriggerUp.add(() => {
       if (this.openAudio) {
         this.openAudio.play(1)
@@ -817,12 +812,7 @@ export class DeviceDetailPanel {
     const closeBtn = closeBtnRoot.createComponent(RectangleButton.getTypeName()) as RectangleButton;
     closeBtn.size = new vec3(5.0, 5.0, 4.0);
     closeBtn.initialize();
-    if (closeBtn.visual) {
-      const v = closeBtn.visual as any;
-      if (typeof v.destroy === 'function') v.destroy();
-      else if (v.getSceneObject) v.getSceneObject().destroy();
-      else if (v.sceneObject) v.sceneObject.destroy();
-    }
+    stripButtonVisual(closeBtn);
 
     // Manual Hover effects on our perfect circle
     closeBtn.onHoverEnter.add(() => { bgPlate.backgroundColor = new vec4(1.0, 0.3, 0.3, 1.0); });
