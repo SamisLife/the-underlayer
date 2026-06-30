@@ -1,239 +1,153 @@
-# Backend
+# The Underlayer Backend
 
-Two FastAPI servers that together handle the full data pipeline: from receiving a raw BLE scan off the hardware, to SSH-collecting a machine's full inventory, to enriching it with CVE data and AI analysis, to streaming it live to Snap Spectacles.
+The backend is a single FastAPI service on port `8000`. It receives SPECTER scans, matches devices to known lab hosts, runs SSH inventory collection, enriches packages with OSV vulnerabilities, produces Gemini or offline analysis, and serves the Lens APIs used by the Spectacles experience.
 
-```
-SPECTER (ESP32)
-    └── POST /api/bluetooth/scan  →  ssh_engine  :8001
-                                          └── SSH into host, collect inventory
-                                          └── POST /api/scan  →  app.py  :8000
-                                                                    └── OSV CVE lookup
-                                                                    └── MongoDB store
-                                                                    └── WebSocket broadcast → Snap Lens
-```
-
----
+No database is required. Device state is held in memory and refreshed by re-scanning, which keeps setup small and predictable for demos.
 
 ## Setup
 
-### 1. Python environment
-
 ```bash
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+cd Backend
+python run.py setup
+python run.py run
 ```
 
-### 2. Environment variables
+Health check:
 
 ```bash
-cp .env.example .env
+python run.py health
 ```
 
-Open `.env` and fill in:
+Development server with reload:
 
-| Variable | Description |
-|---|---|
-| `MONGO_URI` | MongoDB Atlas connection string (or `mongodb://localhost:27017`) |
-| `MONGO_DB` | Database name, e.g. `underlayer` |
-| `DO_AI_API_KEY` | DigitalOcean AI API key (primary AI provider) |
-| `GOOGLE_API_KEY` | Google Gemini API key (fallback if DigitalOcean fails) |
-| `RELAY_URL` | URL `ssh_engine` uses to reach `app.py` — default `http://localhost:8000` |
-| `SSH_TIMEOUT` | SSH connection timeout in seconds — default `10` |
-| `CMD_TIMEOUT` | Per-command timeout in seconds — default `15` |
+```bash
+python run.py dev
+```
 
-### 3. Configure SSH targets
+Clean generated files:
 
-Edit `data/hosts.json`. Each entry is a machine that SPECTER might discover over Bluetooth and that you want to SSH-scan:
+```bash
+python run.py clean
+```
+
+## Optional Environment
+
+Create `Backend/.env` only when you need to override defaults.
+
+```bash
+GOOGLE_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash-lite
+OFFLINE_ANALYZE_DELAY=3.5
+PORT=8000
+SSH_PORT=22
+SSH_TIMEOUT=10
+CMD_TIMEOUT=15
+```
+
+`GOOGLE_API_KEY` is optional. Without it:
+
+- `/api/analyze/{hostname}` uses the deterministic offline analyzer.
+- `/api/learn` uses the offline knowledge base for common ports and threat metrics.
+
+## Known Hosts
+
+SPECTER reports BLE/Wi-Fi names and MAC addresses. The backend maps those observations to lab devices through `Backend/data/hosts.json`.
+
+Use `Backend/data/hosts.example.json` as the public-safe shape and keep your real `hosts.json` local:
 
 ```json
 [
   {
-    "bt_name": "my-laptop",
+    "bt_name": "Linux-Laptop-135",
     "bt_mac": "",
-    "display_name": "Dev Laptop",
+    "display_name": "Linux Laptop",
     "can_ssh": true,
-    "hostname": "192.168.1.42",
+    "hostname": "192.168.1.50",
     "device_type": "laptop",
     "ssh_port": 22,
-    "ssh_user": "sami",
-    "ssh_password": null
+    "ssh_user": "ubuntu",
+    "ssh_password": "replace-me"
   }
 ]
 ```
 
-- `bt_name` — substring matched against the Bluetooth device name SPECTER reports. Case-insensitive.
-- `bt_mac` — optional exact MAC match; leave empty to rely on name matching only.
-- `hostname` — IP or hostname used for SSH.
-- `ssh_password` — set to `null` to use SSH key auth instead of password. Key auth is tried first regardless.
-- `can_ssh` — set to `false` to skip SSH scanning for this host (useful for routers, phones, and other non-Linux devices).
+For SSH-capable hosts, the backend runs the commands defined in `Backend/data/ssh_commands.json` and turns the results into a normalized scan document.
 
-The SSH commands collected on each scan are defined in `data/ssh_commands.json`. The defaults cover OS release, installed packages (APT, pip, npm), open ports, active services, Docker images and containers, databases, SUID binaries, and security updates.
+## Data Flow
 
----
-
-## Running
-
-Both servers run independently. Start them in separate terminals.
-
-```bash
-# Terminal 1 — relay server (WebSocket, CVE lookup, AI analysis, MongoDB)
-uvicorn app:app --host 0.0.0.0 --port 8000
-
-# Terminal 2 — SSH engine (BLE intake, SSH recon, forwards to relay)
-uvicorn ssh_engine:app --host 0.0.0.0 --port 8001
+```text
+SPECTER POST /api/bluetooth/scan
+  -> classify each BLE/Wi-Fi observation against hosts.json
+  -> immediately publish lightweight device stubs
+  -> queue SSH scans for known SSH-capable devices
+  -> collect OS, ports, services, users, packages, Docker, and update state
+  -> query OSV for affected packages
+  -> expose AR summaries to the Lens
 ```
 
-Verify both are healthy:
+When the Lens asks for analysis:
 
-```bash
-curl http://localhost:8000/api/health
-curl http://localhost:8001/api/health
+```text
+POST /api/analyze/{hostname}
+  -> refresh OSV matches
+  -> try Gemini if GOOGLE_API_KEY exists
+  -> otherwise run offline analysis
+  -> attach problems and fix commands to the AR summary
 ```
 
-Logs land in `logs/` (created automatically). Each SSH scan writes a full JSON report under `logs/scans/`, and each AI analysis result under `logs/reports/`.
+## Main Endpoints
 
----
-
-## Endpoints
-
-### `ssh_engine.py` — port 8001
-
-Receives raw BLE scan data from SPECTER, matches devices against `hosts.json`, SSHs into matched hosts, and relays completed scans to `app.py`.
-
-| Method | Path | Description |
+| Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/` | Status, relay URL, loaded host count |
-| `GET` | `/api/health` | Health check — confirms relay is reachable, shows hosts and command count |
-| `POST` | `/api/bluetooth/scan` | **Called by SPECTER.** Receives `{scanner_id, devices: [{name, mac, rssi}]}`, clears previous session, sends device stubs to relay immediately, queues SSH scans in background threads |
-| `POST` | `/api/debug/scan-host` | Directly SSH-scan a host by hostname without going through BLE matching — useful for development |
-| `POST` | `/api/ssh/run-command` | Execute a specific command on a named host — called by `app.py` when a user approves a remediation action |
+| `GET` | `/api/health` | Health, storage mode, loaded host/command counts |
+| `DELETE` | `/api/devices` | Clear current in-memory device state |
+| `POST` | `/api/bluetooth/scan` | SPECTER intake: BLE/Wi-Fi observations |
+| `POST` | `/api/scan/trigger` | Ask the registered SPECTER device to scan now |
+| `POST` | `/api/scanner/register` | SPECTER announces its local IP after Wi-Fi connects |
+| `POST` | `/api/scan` | Ingest a completed scan document |
+| `GET` | `/api/devices` | Full stored device records |
+| `GET` | `/api/devices/ar` | Lens-friendly device summaries |
+| `GET` | `/api/devices/{hostname}` | One full device record |
+| `POST` | `/api/analyze/{hostname}` | Generate risk summary, problems, and fix commands |
+| `POST` | `/api/approve-action` | Record approval/rejection; execute over SSH only when approved |
+| `POST` | `/api/learn` | Explain a port, metric, or risk in plain language |
+| `POST` | `/api/debug/scan-host` | Developer path: scan one SSH host directly |
+| `POST` | `/api/ssh/run-command` | Internal/debug command execution path |
+| `WS` | `/ws/devices` | WebSocket feed for clients that want live events |
 
-**`POST /api/bluetooth/scan` response:**
-```json
-{
-  "status": "queued",
-  "recognized": 2,
-  "ssh_queued": 1,
-  "devices": [
-    { "name": "my-laptop", "recognized": true, "ssh_capable": true },
-    { "name": "(Apple)",    "recognized": false, "ssh_capable": false }
-  ]
-}
-```
+## Direct SSH Development Flow
 
-The firmware uses `recognized` and `ssh_capable` to tag devices on the TFT results screen.
+Use this when SPECTER is not available but you want to test the backend and Lens with a real host:
 
----
-
-### `app.py` — port 8000
-
-Stores scan results, enriches them with CVE data, runs AI analysis, and streams everything to connected Spectacles over WebSocket.
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/` | Service status |
-| `GET` | `/api/health` | Verifies MongoDB connection |
-| `DELETE` | `/api/devices` | Clear all devices — called by `ssh_engine` at the start of each scan session |
-| `POST` | `/api/scan` | **Called by `ssh_engine`.** Ingests a completed scan, runs OSV CVE lookup, saves to MongoDB, broadcasts `device_updated` to all WebSocket clients |
-| `GET` | `/api/devices` | All devices with full scan data |
-| `GET` | `/api/devices/ar` | Devices as AR-ready summaries (used by the lens on initial poll) |
-| `GET` | `/api/devices/{hostname}` | Single device by hostname |
-| `POST` | `/api/analyze/{hostname}` | Run AI analysis on a device — returns risk summary, prioritized problems, and ready-to-run fix commands |
-| `POST` | `/api/approve-action` | Record approval or rejection of a remediation command; if approved, calls `ssh_engine` to execute it over SSH |
-| `POST` | `/api/learn` | Explain a topic in plain language (e.g. "what is SQL injection") |
-| `GET` | `/api/scanner/register` | SPECTER registers its local IP on WiFi connect |
-| `WS` | `/ws/devices` | WebSocket stream — sends `initial_devices` on connect, then `device_updated` after each scan |
-
----
-
-## What Gets Collected Over SSH
-
-For each matched host, `ssh_engine` runs a sequence of commands and parses the results into a structured document. The full command list is in `data/ssh_commands.json`. Fields collected include:
-
-- **OS:** distribution, version, kernel, architecture
-- **Hardware:** CPU model, memory
-- **Users:** local user accounts
-- **Packages:** APT packages, pip packages, npm globals — each with name and version
-- **Ports:** open TCP ports with associated process names
-- **Services:** active systemd services
-- **Docker:** running containers and images (with tag — `latest` tags are flagged)
-- **Databases:** detected MySQL, PostgreSQL, Redis, MongoDB, Elasticsearch
-- **SUID binaries:** files with setuid bit set
-- **Security updates:** packages with pending security patches (via `apt list --upgradable`)
-- **Cloud provider:** detected via AWS/GCP/Azure metadata endpoint probes
-- **Environment:** detected web servers, Kubernetes, CI runners
-
----
-
-## CVE Enrichment
-
-After each scan, `app.py` queries the [OSV vulnerability database](https://osv.dev/) in async batches — up to 100 packages per request. Results are cached in memory (up to 2000 entries) to avoid redundant API calls across scans.
-
-CVEs are grouped by package so the AR lens shows one card per vulnerable package rather than one card per CVE ID. GHSA and PYSEC IDs that reference the same underlying CVE are deduplicated. Severity maps to `critical`, `high`, `medium`, or `low`. If OSV returns a worse severity than the heuristic threat level assigned during scan, the device's threat level is escalated.
-
----
-
-## AI Analysis
-
-`POST /api/analyze/{hostname}` sends the device's full scan document, AR summary, and vulnerability matches to DigitalOcean AI (model: `openai-gpt-oss-120b`) with a structured prompt. If that call fails, it falls back to Google Gemini 2.5 Flash.
-
-The response is a JSON object:
-```json
-{
-  "risk_summary": "Medium risk from many vulnerable Python and system packages.",
-  "recommendation": "Update the affected packages and close unused services.",
-  "reasoning": ["Dozens of Python libraries have known CVEs.", "..."],
-  "problems": [
-    {
-      "priority": "High",
-      "description": "Cryptography Python library (v43.0.1) has multiple CVEs.",
-      "fixCommand": "sudo -H pip3 install --upgrade --ignore-installed --break-system-packages cryptography==43.0.2",
-      "fixLabel": "Upgrade cryptography package"
-    }
-  ]
-}
-```
-
-![AI analysis result logged in the backend terminal](../Images/analysis_json_data.png)
-
-Fix commands are OS-aware: pip packages get the correct `pip3 install` flags for system-managed Python, APT packages use `apt-get install --only-upgrade`, and npm packages use `npm install -g`.
-
----
-
-## MongoDB Collections
-
-| Collection | Contents |
-|---|---|
-| `devices` | Latest scan summary per device (upserted on each scan) |
-| `device_scans` | Full historical scan documents |
-| `actions` | Remediation actions with approval status and SSH output |
-
----
-
-## Development Tips
-
-**Test a scan without hardware:**
 ```bash
-curl -X POST http://localhost:8001/api/bluetooth/scan \
+curl -X POST http://localhost:8000/api/debug/scan-host \
   -H "Content-Type: application/json" \
-  -d '{"scanner_id": "dev", "devices": [{"name": "my-laptop", "mac": "AA:BB:CC:DD:EE:FF", "rssi": -55}]}'
+  -d '{"hostname":"192.168.1.50","username":"ubuntu","password":"replace-me","forward_to_relay":true}'
 ```
 
-**Directly scan a host by IP:**
-```bash
-curl -X POST http://localhost:8001/api/debug/scan-host \
-  -H "Content-Type: application/json" \
-  -d '{"hostname": "192.168.1.42"}'
+Then open the Lens and press `DEVICES`; the forwarded scan should appear through `/api/devices/ar`.
+
+## Module Map
+
+```text
+app/main.py              FastAPI app, logging, health, router mounting
+app/routers/relay.py     Lens-facing APIs, analysis, approval, SPECTER trigger
+app/routers/scanner.py   SPECTER intake and direct SSH scan endpoints
+app/store.py             in-memory device/action store
+app/ai.py                Gemini calls and response shaping
+app/offline_analysis.py  no-key remediation generator
+app/knowledge.py         no-key notebook explanations
+app/osv.py               OSV vulnerability lookup and caching
+app/summary.py           raw scan -> AR summary
+app/ssh/                 host matching, SSH collection, parsers, commands
 ```
 
-**Trigger AI analysis:**
-```bash
-curl -X POST http://localhost:8000/api/analyze/192.168.1.42
-```
+## Security Limitations
 
-**Watch WebSocket events:**
-```bash
-# requires wscat: npm install -g wscat
-wscat -c ws://localhost:8000/ws/devices
-```
+This backend is for controlled demo networks:
+
+- SSH credentials live in `Backend/data/hosts.json`; keep real values out of public commits.
+- The SSH scanner accepts unknown host keys for demo speed.
+- Approved remediation commands may use `sudo -S`, which is convenient but not production-grade secret handling.
+- The store is intentionally in-memory. Restarting the backend clears device state.
+- Only scan and remediate machines you own or have permission to test.
