@@ -45,6 +45,15 @@ export function threatColor(level: ThreatLevel): vec4 {
   }
 }
 
+export function priorityColor(priority: string): vec4 {
+  switch (String(priority || "").toLowerCase()) {
+    case "medium": return new vec4(1.0, 0.7, 0.0, 1.0)
+    case "high":
+    case "critical": return new vec4(1.0, 0.2, 0.2, 1.0)
+    default: return new vec4(0.2, 1.0, 0.2, 1.0)
+  }
+}
+
 export function threatLabel(level: ThreatLevel): string {
   switch (level) {
     case "critical": return "CRITICAL"

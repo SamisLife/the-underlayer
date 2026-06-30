@@ -75,7 +75,7 @@ export class LiveDeviceDataSource implements IDeviceDataSource {
               return { ok: true, device: normalizeDevice(data.arSummary) }
             }
           } catch (e) {
-            print(`Failed to parse updated device: ${e}`)
+            log.w(`Failed to parse updated device: ${e}`)
           }
           return { ok: true, device: null }
         }

@@ -1,3 +1,11 @@
+/**
+ * DeviceDetailPanel.ts
+ * The expanded AR device card: a holographic triple-monitor view built procedurally and anchored in
+ * world space. Renders the vulnerability breakdown, the radar threat chart, network/open ports,
+ * AI-generated action items with FIX-approval popups, the "analyzing" animation, and the AI tutor
+ * notebook. Talks to the backend through the injected DeviceDataSourceProvider (live vs demo).
+ */
+
 import {RectangleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/RectangleButton"
 import {RoundedRectangleVisual} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangleVisual"
 import {Interactable} from "SpectaclesInteractionKit.lspkg/Components/Interaction/Interactable/Interactable"
@@ -11,7 +19,8 @@ import {
   FS_BODY,
   FS_SMALL,
   FS_TINY,
-  threatColor
+  threatColor,
+  priorityColor
 } from "./UI/Theme"
 import {makeObject, makeText, makePlate} from "./UI/UiBuilders"
 
@@ -376,28 +385,7 @@ export class DeviceDetailPanel {
       
       let pY = r_s_h/2 - (40 * SC_R)
       for (let i = 3; i < Math.min(problems.length, 6); i++) {
-        const prob = problems[i]
-        const prio = prob.priority.toLowerCase()
-        let pColor = new vec4(0.2, 1, 0.2, 1) // Green for low/other
-        if (prio === "medium") pColor = new vec4(1, 0.7, 0, 1) // Yellow/orange for medium
-        else if (prio === "high" || prio === "critical") pColor = new vec4(1, 0.2, 0.2, 1) // Red for high/critical
-
-        // Problem text
-        const textW = (r_s_w - (70 * SC_R)) * TS
-        const startX = -r_s_w/2 + (15 * SC_R)
-        const posX = startX + textW/2
-        
-        makeText(rightRoot, this.layer, `Prob_${i}`, `[${prob.priority}] ${prob.description}`, FS_SMALL * SC_R * TS, pColor, new vec3(posX, pY, 0), textW, 16 * SC_R * TS, HorizontalAlignment.Left)
-
-        // FIX button
-        const fixBtnRoot = makeObject(rightRoot, this.layer, `FixBtn_${i}`, new vec3((r_s_w/2) - (28 * SC_R), pY - (6 * SC_R), 0))
-        makeText(fixBtnRoot, this.layer, "Txt", "FIX", FS_SMALL * SC_R * TS, C_WHITE, new vec3(0, 0, 0.2), 16 * SC_R * TS, 8 * SC_R * TS)
-        const fixBtn = fixBtnRoot.createComponent(RectangleButton.getTypeName()) as RectangleButton
-        fixBtn.size = new vec3(20 * SC_R, 10 * SC_R, 2.0)
-        fixBtn.initialize()
-        // Color match the button to the severity level with some transparency
-        this.configureBtn(fixBtn, new vec4(pColor.r * 0.5, pColor.g * 0.5, pColor.b * 0.5, 0.8), () => this.showFixPopup(prob))
-        
+        this.buildActionItemRow(rightRoot, problems[i], i, SC_R, r_s_w, pY, TS)
         pY -= (35 * SC_R)
       }
     } else {
@@ -508,28 +496,7 @@ export class DeviceDetailPanel {
       
       let pY = l_s_h/2 - (40 * SC_L)
       for (let i = 0; i < Math.min(problems.length, 3); i++) {
-        const prob = problems[i]
-        const prio = prob.priority.toLowerCase()
-        let pColor = new vec4(0.2, 1, 0.2, 1) // Green for low/other
-        if (prio === "medium") pColor = new vec4(1, 0.7, 0, 1) // Yellow/orange for medium
-        else if (prio === "high" || prio === "critical") pColor = new vec4(1, 0.2, 0.2, 1) // Red for high/critical
-
-        // Problem text
-        const textW = (l_s_w - (70 * SC_L)) * TS
-        const startX = -l_s_w/2 + (15 * SC_L)
-        const posX = startX + textW/2
-        
-        makeText(leftRoot, this.layer, `Prob_${i}`, `[${prob.priority}] ${prob.description}`, FS_SMALL * SC_L * TS, pColor, new vec3(posX, pY, 0), textW, 16 * SC_L * TS, HorizontalAlignment.Left)
-
-        // FIX button
-        const fixBtnRoot = makeObject(leftRoot, this.layer, `FixBtn_${i}`, new vec3((l_s_w/2) - (28 * SC_L), pY - (6 * SC_L), 0))
-        makeText(fixBtnRoot, this.layer, "Txt", "FIX", FS_SMALL * SC_L * TS, C_WHITE, new vec3(0, 0, 0.2), 16 * SC_L * TS, 8 * SC_L * TS)
-        const fixBtn = fixBtnRoot.createComponent(RectangleButton.getTypeName()) as RectangleButton
-        fixBtn.size = new vec3(20 * SC_L, 10 * SC_L, 2.0)
-        fixBtn.initialize()
-        // Color match the button to the severity level with some transparency
-        this.configureBtn(fixBtn, new vec4(pColor.r * 0.5, pColor.g * 0.5, pColor.b * 0.5, 0.8), () => this.showFixPopup(prob))
-        
+        this.buildActionItemRow(leftRoot, problems[i], i, SC_L, l_s_w, pY, TS)
         pY -= (35 * SC_L)
       }
     } else {
@@ -606,6 +573,61 @@ export class DeviceDetailPanel {
         this.orbitingNodes.push(node);
       }
     }
+  }
+
+  private buildActionItemRow(
+    root: SceneObject,
+    problem: any,
+    index: number,
+    scale: number,
+    monitorWidth: number,
+    yPosition: number,
+    textScale: number
+  ): void {
+    const pColor = priorityColor(problem.priority)
+    const textW = (monitorWidth - (70 * scale)) * textScale
+    const startX = -monitorWidth / 2 + (15 * scale)
+    const posX = startX + textW / 2
+
+    makeText(
+      root,
+      this.layer,
+      `Prob_${index}`,
+      `[${problem.priority}] ${problem.description}`,
+      FS_SMALL * scale * textScale,
+      pColor,
+      new vec3(posX, yPosition, 0),
+      textW,
+      16 * scale * textScale,
+      HorizontalAlignment.Left
+    )
+
+    const fixBtnRoot = makeObject(
+      root,
+      this.layer,
+      `FixBtn_${index}`,
+      new vec3((monitorWidth / 2) - (28 * scale), yPosition - (6 * scale), 0)
+    )
+    makeText(
+      fixBtnRoot,
+      this.layer,
+      "Txt",
+      "FIX",
+      FS_SMALL * scale * textScale,
+      C_WHITE,
+      new vec3(0, 0, 0.2),
+      16 * scale * textScale,
+      8 * scale * textScale
+    )
+
+    const fixBtn = fixBtnRoot.createComponent(RectangleButton.getTypeName()) as RectangleButton
+    fixBtn.size = new vec3(20 * scale, 10 * scale, 2.0)
+    fixBtn.initialize()
+    this.configureBtn(
+      fixBtn,
+      new vec4(pColor.r * 0.5, pColor.g * 0.5, pColor.b * 0.5, 0.8),
+      () => this.showFixPopup(problem)
+    )
   }
 
   private triggerAnalysis(btn: RectangleButton, root: SceneObject): void {

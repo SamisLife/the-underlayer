@@ -1,3 +1,10 @@
+/**
+ * MainMenuController.ts
+ * The floating main menu / HUD. Manages the MINIMIZED / EXPANDED / SCAN / DEVICES states, follows the
+ * camera, and drives the SCAN flow (world-scan effect + backend scan trigger) and the DEMO MODE
+ * toggle. Shows/hides the DeviceListPanel.
+ */
+
 import {RectangleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/RectangleButton"
 import {RoundedRectangleVisual} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangleVisual"
 import {Interactable} from "SpectaclesInteractionKit.lspkg/Components/Interaction/Interactable/Interactable"
@@ -7,6 +14,9 @@ import {makeObject, makePlate, makeText} from "./UI/UiBuilders"
 import {C_CYAN, C_DIM, C_WHITE, FS_TITLE, FS_SMALL} from "./UI/Theme"
 import {DemoState} from "./Data/DeviceTypes"
 import {lerp} from "SpectaclesInteractionKit.lspkg/Utils/mathUtils"
+import NativeLogger from "SpectaclesInteractionKit.lspkg/Utils/NativeLogger"
+
+const log = new NativeLogger("MainMenu")
 
 @component
 export class MainMenuController extends BaseScriptComponent {
@@ -76,7 +86,7 @@ export class MainMenuController extends BaseScriptComponent {
 
   private init(): void {
     if (!this.cameraRoot) {
-      print("MainMenuController needs a cameraRoot!")
+      log.e("MainMenuController needs a cameraRoot!")
       return
     }
 

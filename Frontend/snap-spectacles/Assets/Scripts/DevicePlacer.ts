@@ -1,8 +1,14 @@
+/**
+ * DevicePlacer.ts
+ * Placement mode: spawns a "ghost" device model in front of the camera and lets the user pinch or tap
+ * to anchor it in world space, then reports the final world position back so a DeviceDetailPanel can
+ * be created there.
+ */
+
 import {Device} from "./Data/DeviceTypes"
 import {makeText} from "./UI/UiBuilders"
-import {C_CYAN, C_WHITE, FS_SMALL} from "./UI/Theme"
+import {C_CYAN, FS_SMALL} from "./UI/Theme"
 import {RectangleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/RectangleButton"
-import {RoundedRectangleVisual} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangleVisual"
 
 export class DevicePlacer {
   private script: ScriptComponent

@@ -1,3 +1,13 @@
+/**
+ * WorldScannerEffect.ts
+ * The world-mesh "scanning the room" visual: clones the world-mesh material and ramps its alpha in and
+ * out over the scan duration. Triggered by MainMenuController when entering the SCAN state.
+ */
+
+import NativeLogger from "SpectaclesInteractionKit.lspkg/Utils/NativeLogger"
+
+const log = new NativeLogger("WorldScanner")
+
 @component
 export class WorldScannerEffect extends BaseScriptComponent {
   @input
@@ -23,7 +33,7 @@ export class WorldScannerEffect extends BaseScriptComponent {
     // Mesh visual only. The scanning sound is owned by MainMenuController (tied to the SCAN
     // state) because this component may live on a disabled object whose timers never fire.
     if (!this.meshVisual || !this.material) {
-      print("WorldScannerEffect: Missing meshVisual or material!")
+      log.e("WorldScannerEffect: Missing meshVisual or material!")
       return
     }
 
