@@ -625,7 +625,7 @@ export class DeviceDetailPanel {
 
         interactable.onTriggerEnd.add(() => {
           if (this.selectAudio) this.selectAudio.play(1)
-          this.showNotebook(`Port ${pStr}`, `Open port ${pStr} on ${this.device.hostname}`)
+          this.showNotebook(`Port ${pStr}`, this.buildPortLearningContext(p, pStr))
         })
 
         this.makeLine(netCenter, `PLine_${i}`, vec3.zero(), new vec3(px, py, 0), 0.5 * scale, new vec4(1, 0.2, 0.2, 0.3))
@@ -637,6 +637,25 @@ export class DeviceDetailPanel {
       makePlate(node, this.layer, `NodePlt_${i}`, new vec2(6 * scale, 6 * scale), vec3.zero(), new vec4(1.0, 0.2, 0.2, 1.0), 1.0 * scale, undefined, 0, 0)
       this.orbitingNodes.push(node)
     }
+  }
+
+  private buildPortLearningContext(port: PortDisplayItem, portNumber: string): string {
+    const summary = this.device.ar_summary
+    const service = typeof port === "object" ? port.service : undefined
+    const risk = typeof port === "object" ? port.risk : undefined
+    const note = typeof port === "object" ? port.note : undefined
+
+    const details = [
+      `Open port ${portNumber} on ${this.device.hostname}.`,
+      service ? `Service: ${service}.` : "",
+      risk ? `Risk: ${risk}.` : "",
+      note ? `Note: ${note}.` : "",
+      summary?.os ? `Device OS: ${summary.os}.` : "",
+      summary?.threatLevel ? `Current threat level: ${summary.threatLevel}.` : "",
+      summary?.cveCount !== undefined ? `Known CVE count: ${summary.cveCount}.` : ""
+    ]
+
+    return details.filter((part) => part !== "").join(" ")
   }
 
   private buildActionItemRow(

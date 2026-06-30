@@ -1,7 +1,7 @@
 /**
  * DeviceDataSourceProvider.ts
  * Singleton facade the panels consume as an IDeviceDataSource. Holds one live and one mock
- * source and routes each call to whichever matches the current DemoState.
+ * source and routes most calls to whichever matches the current DemoState.
  *
  * IMPORTANT: This is the ONLY file in the app that reads DemoState. UI/state code asks the
  * provider for `isLive` instead of touching the global flag, which keeps the runtime DEMO
@@ -63,6 +63,8 @@ export class DeviceDataSourceProvider implements IDeviceDataSource {
   }
 
   learn(topic: string, context: string): Promise<string> {
-    return this.active.learn(topic, context)
+    // Demo Mode should still feel intelligent: keep mocked devices/actions, but ask the
+    // backend for notebook explanations so Gemini/offline knowledge behave like Live Mode.
+    return this.live ? this.live.learn(topic, context) : this.active.learn(topic, context)
   }
 }
