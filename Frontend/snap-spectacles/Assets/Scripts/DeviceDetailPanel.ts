@@ -9,7 +9,7 @@
 import {RectangleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/RectangleButton"
 import {Interactable} from "SpectaclesInteractionKit.lspkg/Components/Interaction/Interactable/Interactable"
 import {TargetingMode} from "SpectaclesInteractionKit.lspkg/Core/Interactor/Interactor"
-import {Device} from "./Data/DeviceTypes"
+import {Device, DeviceSummary, OpenPort} from "./Data/DeviceTypes"
 import {DeviceDataSourceProvider} from "./Services/DeviceDataSourceProvider"
 import {
   C_CYAN,
@@ -56,6 +56,23 @@ export interface DeviceDetailPanelConfig {
   openAudio?: AudioComponent
   selectAudio?: AudioComponent
 }
+
+interface TripleMonitorLayout {
+  baseCenterWidth: number
+  baseCenterHeight: number
+  baseCenterDepth: number
+  baseSideWidth: number
+  baseSideHeight: number
+  baseSideDepth: number
+  screenRecess: number
+  sideAngle: number
+  sideGap: number
+  textScale: number
+  centerScale: number
+}
+
+type ActionProblem = NonNullable<DeviceSummary["problems"]>[number]
+type PortDisplayItem = OpenPort | number | string
 
 export class DeviceDetailPanel {
   private panelRoot: SceneObject
@@ -258,77 +275,92 @@ export class DeviceDetailPanel {
     this.threatColor = tColor
     this.isHighThreat = tLevel === "high" || tLevel === "critical"
 
-    const BASE_c_w = 340;
-    const BASE_c_h = 145;
-    const BASE_c_d = 28;
-    const BASE_s_w = 240;
-    const BASE_s_h = 145;
-    const BASE_s_d = 24;
-    const BASE_screen_recess = 2.5;
-    const side_angle = 35 * Math.PI / 180;
-    const BASE_side_gap = 4;
+    const layout: TripleMonitorLayout = {
+      baseCenterWidth: 340,
+      baseCenterHeight: 145,
+      baseCenterDepth: 28,
+      baseSideWidth: 240,
+      baseSideHeight: 145,
+      baseSideDepth: 24,
+      screenRecess: 2.5,
+      sideAngle: 35 * Math.PI / 180,
+      sideGap: 4,
+      textScale: 4.5,
+      centerScale: this.centerUIScale
+    }
 
-    // Scales text rect width+height together (FitHeight renders at rect height).
-    // Increase this constant to make all text larger; positions stay anchored to screen.
-    const TS = 4.5;
+    const cves = this.device.ar_summary?.cveCount || 0
+    const ports = this.device.ar_summary?.openPorts || []
+    const problems = this.device.ar_summary?.problems || []
 
-    // ==========================================
-    // --- CENTER MONITOR (Main & Packages) ---
-    // ==========================================
-    const SC_C = this.centerUIScale;
-    const c_w = BASE_c_w * SC_C;
-    const c_h = BASE_c_h * SC_C;
-    const c_d = BASE_c_d * SC_C;
-    
-    const c_z_face = (c_d / 2) - (BASE_screen_recess * SC_C) + (2.0 * SC_C);
-    const centerBasePos = new vec3(0, 0, c_z_face);
-    const centerPos = new vec3(centerBasePos.x + this.centerUIOffset.x, centerBasePos.y + this.centerUIOffset.y, centerBasePos.z + this.centerUIOffset.z);
-    const centerRoot = makeObject(scaledRoot, this.layer, "CenterMonitor", centerPos);
-    centerRoot.getTransform().setLocalRotation(quat.fromEulerVec(new vec3(this.centerUIRot.x * Math.PI/180, this.centerUIRot.y * Math.PI/180, this.centerUIRot.z * Math.PI/180)));
-    
+    this.buildCenterMonitor(scaledRoot, layout, tLevel, tColor, cves)
+    this.buildRightMonitor(scaledRoot, layout, tColor, cves, ports, problems)
+    this.buildLeftMonitor(scaledRoot, layout, ports, problems)
+  }
+
+  private buildCenterMonitor(
+    scaledRoot: SceneObject,
+    layout: TripleMonitorLayout,
+    tLevel: string,
+    tColor: vec4,
+    cves: number
+  ): void {
+    const SC_C = layout.centerScale
+    const c_w = layout.baseCenterWidth * SC_C
+    const c_h = layout.baseCenterHeight * SC_C
+    const c_d = layout.baseCenterDepth * SC_C
+    const TS = layout.textScale
+
+    const c_z_face = (c_d / 2) - (layout.screenRecess * SC_C) + (2.0 * SC_C)
+    const centerBasePos = new vec3(0, 0, c_z_face)
+    const centerPos = new vec3(
+      centerBasePos.x + this.centerUIOffset.x,
+      centerBasePos.y + this.centerUIOffset.y,
+      centerBasePos.z + this.centerUIOffset.z
+    )
+    const centerRoot = makeObject(scaledRoot, this.layer, "CenterMonitor", centerPos)
+    centerRoot.getTransform().setLocalRotation(quat.fromEulerVec(new vec3(
+      this.centerUIRot.x * Math.PI/180,
+      this.centerUIRot.y * Math.PI/180,
+      this.centerUIRot.z * Math.PI/180
+    )))
+
     this.centerRoot = centerRoot
     this.baseCenterUIPos = centerPos
-    
-    // Create 3 Data Tubes for the scanning animation
+
     this.dataTubes = []
     this.dataChunks = []
     for (let i = 0; i < 3; i++) {
-       const tubeRoot = makeObject(centerRoot, this.layer, `DataTube_${i}`, vec3.zero())
-       
-       // Draw a 3D curved wire using 15 segments
-       const segments = 15;
-       let prevPos = this.getTubeCurve(i, 0, SC_C, c_h)
-       for (let s = 1; s <= segments; s++) {
-           const t = s / segments;
-           const curPos = this.getTubeCurve(i, t, SC_C, c_h)
-           // Make the wire thick and solid to look like a glowing 3D conduit (opacity lowered so chunks are visible)
-           this.makeLine3D(tubeRoot, `WireSeg_${s}`, prevPos, curPos, 6.0 * SC_C, new vec4(0, 1, 1, 0.2))
-           prevPos = curPos;
-       }
-       
-       this.dataTubes.push(tubeRoot)
-       
-       // Create a chunk for each tube
-       const chunkRoot = makeObject(tubeRoot, this.layer, `Chunk_${i}`, vec3.zero())
-       chunkRoot.enabled = false
-       const txt = makeText(chunkRoot, this.layer, `ChunkTxt_${i}`, "0101", FS_BODY * SC_C * TS, C_CYAN, vec3.zero(), 30 * SC_C * TS, 10 * SC_C * TS)
-       this.dataChunks.push({ obj: chunkRoot, tubeIndex: i, progress: Math.random(), text: txt })
+      const tubeRoot = makeObject(centerRoot, this.layer, `DataTube_${i}`, vec3.zero())
+
+      const segments = 15
+      let prevPos = this.getTubeCurve(i, 0, SC_C, c_h)
+      for (let s = 1; s <= segments; s++) {
+        const t = s / segments
+        const curPos = this.getTubeCurve(i, t, SC_C, c_h)
+        this.makeLine3D(tubeRoot, `WireSeg_${s}`, prevPos, curPos, 6.0 * SC_C, new vec4(0, 1, 1, 0.2))
+        prevPos = curPos
+      }
+
+      this.dataTubes.push(tubeRoot)
+
+      const chunkRoot = makeObject(tubeRoot, this.layer, `Chunk_${i}`, vec3.zero())
+      chunkRoot.enabled = false
+      const txt = makeText(chunkRoot, this.layer, `ChunkTxt_${i}`, "0101", FS_BODY * SC_C * TS, C_CYAN, vec3.zero(), 30 * SC_C * TS, 10 * SC_C * TS)
+      this.dataChunks.push({ obj: chunkRoot, tubeIndex: i, progress: Math.random(), text: txt })
     }
-    
+
     const displayName = this.device.bt_name || this.device.hostname || "UNKNOWN"
     makeText(centerRoot, this.layer, "Header", `> ${displayName}_`, (FS_TITLE * 1.75) * SC_C * TS, C_WHITE, new vec3(0, c_h/2 - (35 * SC_C), 0), (c_w - (20 * SC_C)) * TS, 60 * SC_C * TS)
-    const cves = this.device.ar_summary?.cveCount || 0
     makeText(centerRoot, this.layer, "SubHeader", `TOTAL CVE: ${cves} | THREAT: ${tLevel.toUpperCase()}`, (FS_SMALL * 1.75) * SC_C * TS, tColor, new vec3(0, c_h/2 - (65 * SC_C), 0), (c_w - (20 * SC_C)) * TS, 40 * SC_C * TS)
-    
+
     const counts = this.device.ar_summary?.sourceCounts || {}
     let totalVulns = 0
     for (const count of Object.values(counts)) {
       totalVulns += count
     }
-    
-    const ports = this.device.ar_summary?.openPorts || [];
 
-    let yOffset = c_h/2 - (95 * SC_C);
+    let yOffset = c_h/2 - (95 * SC_C)
     if (totalVulns === 0) {
       if (this.device.ar_summary?.scanMetadata?.ssh_status === "queued") {
         makeText(centerRoot, this.layer, "NoVulns", "GRABBING INFORMATION FROM SSH...", FS_SMALL * SC_C * TS, new vec4(1, 0.6, 0, 1), new vec3(0, yOffset, 0), (c_w - (40 * SC_C)) * TS, 20 * SC_C * TS)
@@ -339,239 +371,277 @@ export class DeviceDetailPanel {
       for (const [src, count] of Object.entries(counts)) {
         const maxW = c_w - (160 * SC_C)
         const w = Math.min((count / totalVulns) * maxW, maxW)
-        const labelW = 80 * SC_C * TS;
-        const valW = 40 * SC_C * TS;
-        // Shift anchors to the right by half the bounding box width to counteract center-anchored bounding boxes
+        const labelW = 80 * SC_C * TS
+        const valW = 40 * SC_C * TS
         makeText(centerRoot, this.layer, `Txt_${src}`, `> ${src}:`, FS_SMALL * SC_C * TS, C_CYAN, new vec3(-c_w/2 + (50 * SC_C) + labelW/2, yOffset, 0), labelW, 20 * SC_C * TS, HorizontalAlignment.Left)
         makePlate(centerRoot, this.layer, `Bar_${src}`, new vec2(w, 6 * SC_C), new vec3(-c_w/2 + (100 * SC_C) + w/2, yOffset, 0), tColor, 2 * SC_C, undefined, 0, 0)
         makeText(centerRoot, this.layer, `Val_${src}`, `${count}`, FS_SMALL * SC_C * TS, C_WHITE, new vec3(-c_w/2 + (115 * SC_C) + w + valW/2, yOffset, 0), valW, 20 * SC_C * TS, HorizontalAlignment.Left)
         yOffset -= (5 * SC_C * TS)
       }
     }
+  }
 
-    // ==========================================
-    // --- RIGHT MONITOR (Radar Chart) ---
-    // ==========================================
-    const SC_R = this.rightUIScale;
-    const r_s_w = BASE_s_w * SC_R;
-    const r_s_h = BASE_s_h * SC_R;
-    const r_s_d = BASE_s_d * SC_R;
-    
-    const r_s_z_face = (r_s_d / 2) - (BASE_screen_recess * SC_R) + (0.1 * SC_R);
-    // Use SC_C for pivot calculation so the side panels physically attach to the center panel's edge 
-    // even if the user applies different scales to each panel!
-    const r_pivot_x = (BASE_c_w / 2 + BASE_side_gap) * SC_C;
-    const rightPivot = makeObject(scaledRoot, this.layer, "RightPivot", new vec3(r_pivot_x, 0, 0));
-    rightPivot.getTransform().setLocalRotation(quat.fromEulerVec(new vec3(0, -side_angle, 0)));
-    
-    const rBasePos = new vec3(r_s_w / 2, 0, r_s_z_face);
-    const rightPos = new vec3(rBasePos.x + this.rightUIOffset.x, rBasePos.y + this.rightUIOffset.y, rBasePos.z + this.rightUIOffset.z);
-    const rightRoot = makeObject(rightPivot, this.layer, "RightMonitor", rightPos);
-    rightRoot.getTransform().setLocalRotation(quat.fromEulerVec(new vec3(this.rightUIRot.x * Math.PI/180, this.rightUIRot.y * Math.PI/180, this.rightUIRot.z * Math.PI/180)));
-    
+  private buildRightMonitor(
+    scaledRoot: SceneObject,
+    layout: TripleMonitorLayout,
+    tColor: vec4,
+    cves: number,
+    ports: PortDisplayItem[],
+    problems: ActionProblem[]
+  ): void {
+    const SC_C = layout.centerScale
+    const SC_R = this.rightUIScale
+    const TS = layout.textScale
+    const r_s_w = layout.baseSideWidth * SC_R
+    const r_s_h = layout.baseSideHeight * SC_R
+    const r_s_d = layout.baseSideDepth * SC_R
+
+    const r_s_z_face = (r_s_d / 2) - (layout.screenRecess * SC_R) + (0.1 * SC_R)
+    const r_pivot_x = (layout.baseCenterWidth / 2 + layout.sideGap) * SC_C
+    const rightPivot = makeObject(scaledRoot, this.layer, "RightPivot", new vec3(r_pivot_x, 0, 0))
+    rightPivot.getTransform().setLocalRotation(quat.fromEulerVec(new vec3(0, -layout.sideAngle, 0)))
+
+    const rBasePos = new vec3(r_s_w / 2, 0, r_s_z_face)
+    const rightPos = new vec3(rBasePos.x + this.rightUIOffset.x, rBasePos.y + this.rightUIOffset.y, rBasePos.z + this.rightUIOffset.z)
+    const rightRoot = makeObject(rightPivot, this.layer, "RightMonitor", rightPos)
+    rightRoot.getTransform().setLocalRotation(quat.fromEulerVec(new vec3(
+      this.rightUIRot.x * Math.PI/180,
+      this.rightUIRot.y * Math.PI/180,
+      this.rightUIRot.z * Math.PI/180
+    )))
+
     this.rightRoot = rightRoot
     this.baseRightUIPos = rightPos
-    
-    const problems = this.device.ar_summary?.problems || []
 
     if (problems.length > 3) {
-      makeText(rightRoot, this.layer, "R_Header", "ACTION ITEMS (CONT.)", FS_SMALL * SC_R * TS, C_CYAN, new vec3(0, r_s_h/2 - (15 * SC_R), 0), (r_s_w - (20 * SC_R)) * TS, 20 * SC_R * TS);
-      
-      let pY = r_s_h/2 - (40 * SC_R)
-      for (let i = 3; i < Math.min(problems.length, 6); i++) {
-        this.buildActionItemRow(rightRoot, problems[i], i, SC_R, r_s_w, pY, TS)
-        pY -= (35 * SC_R)
-      }
+      this.buildActionItems(rightRoot, "R_Header", "ACTION ITEMS (CONT.)", problems, 3, Math.min(problems.length, 6), SC_R, r_s_w, r_s_h, TS)
     } else {
-      makeText(rightRoot, this.layer, "R_Header", "THREAT ANALYSIS", FS_SMALL * SC_R * TS, C_CYAN, new vec3(0, r_s_h/2 - (10 * SC_R), 0), (r_s_w - (20 * SC_R)) * TS, 20 * SC_R * TS);
-      
-      const radarRoot = makeObject(rightRoot, this.layer, "Radar", new vec3(0, -10 * SC_R, 0));
-      const numAxes = 5;
-      const radius = 35 * SC_R;
-      const labels = ["DENSITY", "NETWORK", "PRIVESC", "OS", "CONFIG"];
-      const os = this.device.ar_summary?.os?.toLowerCase() || "unknown"
-      const pScore = ports.length > 5 ? 1.0 : (ports.length / 5.0);
-      const cScore = Math.min(1.0, cves / 50.0);
-      const oScore = os.includes("windows") ? 0.8 : (os.includes("linux") ? 0.5 : 0.3);
-      const scores = [cScore, pScore, this.isHighThreat ? 0.9 : 0.4, oScore, 0.6];
-      
-      const dataPts: vec3[] = [];
+      makeText(rightRoot, this.layer, "R_Header", "THREAT ANALYSIS", FS_SMALL * SC_R * TS, C_CYAN, new vec3(0, r_s_h/2 - (10 * SC_R), 0), (r_s_w - (20 * SC_R)) * TS, 20 * SC_R * TS)
+      this.buildRadarChart(rightRoot, SC_R, tColor, cves, ports, TS)
+    }
+  }
+
+  private buildRadarChart(
+    rightRoot: SceneObject,
+    scale: number,
+    tColor: vec4,
+    cves: number,
+    ports: PortDisplayItem[],
+    textScale: number
+  ): void {
+    const radarRoot = makeObject(rightRoot, this.layer, "Radar", new vec3(0, -10 * scale, 0))
+    const numAxes = 5
+    const radius = 35 * scale
+    const labels = ["DENSITY", "NETWORK", "PRIVESC", "OS", "CONFIG"]
+    const os = this.device.ar_summary?.os?.toLowerCase() || "unknown"
+    const pScore = ports.length > 5 ? 1.0 : (ports.length / 5.0)
+    const cScore = Math.min(1.0, cves / 50.0)
+    const oScore = os.includes("windows") ? 0.8 : (os.includes("linux") ? 0.5 : 0.3)
+    const scores = [cScore, pScore, this.isHighThreat ? 0.9 : 0.4, oScore, 0.6]
+
+    const dataPts: vec3[] = []
+    for (let i = 0; i < numAxes; i++) {
+      const a = Math.PI / 2 - (Math.PI * 2 * i) / numAxes
+      const pt = new vec3(Math.cos(a) * radius * scores[i], Math.sin(a) * radius * scores[i], 0)
+      dataPts.push(pt)
+
+      const labelOffset = 26 * scale
+      const lp = new vec3(Math.cos(a) * (radius + labelOffset), Math.sin(a) * (radius + labelOffset), 0)
+
+      const labelRoot = makeObject(radarRoot, this.layer, `LblRoot_${i}`, lp)
+      const labelVis = makeObject(labelRoot, this.layer, `LblVis_${i}`, vec3.zero())
+      makeText(labelVis, this.layer, `Lbl_${i}`, labels[i], FS_BODY * scale * textScale, tColor, vec3.zero(), 120 * scale * textScale, 40 * scale * textScale, HorizontalAlignment.Center)
+
+      const qTxtR = makeText(labelVis, this.layer, `QTxt_${i}`, "?", FS_TITLE * scale * textScale, C_CYAN, new vec3(25 * scale, 8 * scale, 0.5), 20 * scale * textScale, 20 * scale * textScale, HorizontalAlignment.Center, 35)
+      qTxtR.enabled = false
+
+      const collider = labelRoot.createComponent("Physics.ColliderComponent") as ColliderComponent
+      collider.fitVisual = false
+      const boxShape = Shape.createBoxShape()
+      boxShape.size = new vec3(35.0 * scale, 15.0 * scale, 2.0)
+      collider.shape = boxShape
+
+      const interactable = labelRoot.createComponent(Interactable.getTypeName()) as Interactable
+      interactable.targetingMode = TargetingMode.All
+
+      interactable.onHoverEnter.add(() => {
+        qTxtR.enabled = true
+        labelVis.getTransform().setLocalPosition(new vec3(0, 0, 10.0))
+      })
+
+      interactable.onHoverExit.add(() => {
+        qTxtR.enabled = false
+        labelVis.getTransform().setLocalPosition(vec3.zero())
+      })
+
+      const ctxStr = `You are an AI embedded in an AR cybersecurity dashboard. Briefly explain what the threat analysis metric '${labels[i]}' means in the context of a cyber spider-web threat analysis diagram. The current target device is ${this.device.hostname} (OS: ${os}). Keep it concise and highly relevant to an active AR cyber operation.`
+      interactable.onTriggerEnd.add(() => {
+        if (this.selectAudio) this.selectAudio.play(1)
+        this.showNotebook(`METRIC: ${labels[i]}`, ctxStr)
+      })
+
+      this.makeLine(radarRoot, `Axis_${i}`, vec3.zero(), new vec3(Math.cos(a) * radius, Math.sin(a) * radius, 0), 0.5 * scale, new vec4(0, 1, 0.8, 0.4))
+    }
+
+    const numSteps = 5
+    for (let step = 1; step <= numSteps; step++) {
+      const rStep = radius * (step / numSteps)
       for (let i = 0; i < numAxes; i++) {
-        const a = Math.PI / 2 - (Math.PI * 2 * i) / numAxes;
-        const pt = new vec3(Math.cos(a) * radius * scores[i], Math.sin(a) * radius * scores[i], 0);
-        dataPts.push(pt);
-        
-        const labelOffset = 26 * SC_R;
-        const lp = new vec3(Math.cos(a) * (radius + labelOffset), Math.sin(a) * (radius + labelOffset), 0);
-        
-        const labelRoot = makeObject(radarRoot, this.layer, `LblRoot_${i}`, lp);
-        const labelVis = makeObject(labelRoot, this.layer, `LblVis_${i}`, vec3.zero());
-        makeText(labelVis, this.layer, `Lbl_${i}`, labels[i], FS_BODY * SC_R * TS, tColor, vec3.zero(), 120 * SC_R * TS, 40 * SC_R * TS, HorizontalAlignment.Center);
-        
-        // Question mark hint (hidden by default)
-        const qTxtR = makeText(labelVis, this.layer, `QTxt_${i}`, "?", FS_TITLE * SC_R * TS, C_CYAN, new vec3(25 * SC_R, 8 * SC_R, 0.5), 20 * SC_R * TS, 20 * SC_R * TS, HorizontalAlignment.Center, 35);
-        qTxtR.enabled = false;
-        
-        const collider = labelRoot.createComponent("Physics.ColliderComponent") as ColliderComponent;
-        collider.fitVisual = false;
-        const boxShape = Shape.createBoxShape();
-        boxShape.size = new vec3(35.0 * SC_R, 15.0 * SC_R, 2.0);
-        collider.shape = boxShape;
+        const a1 = Math.PI / 2 - (Math.PI * 2 * i) / numAxes
+        const a2 = Math.PI / 2 - (Math.PI * 2 * ((i + 1) % numAxes)) / numAxes
 
-        const interactable = labelRoot.createComponent(Interactable.getTypeName()) as Interactable;
-        interactable.targetingMode = TargetingMode.All;
+        const pt1 = new vec3(Math.cos(a1) * rStep, Math.sin(a1) * rStep, 0)
+        const pt2 = new vec3(Math.cos(a2) * rStep, Math.sin(a2) * rStep, 0)
 
-        interactable.onHoverEnter.add(() => {
-            qTxtR.enabled = true;
-            labelVis.getTransform().setLocalPosition(new vec3(0, 0, 10.0)); // Float only the visuals
-        });
-        
-        interactable.onHoverExit.add(() => {
-            qTxtR.enabled = false;
-            labelVis.getTransform().setLocalPosition(vec3.zero()); // Reset
-        });
-
-        const ctxStr = `You are an AI embedded in an AR cybersecurity dashboard. Briefly explain what the threat analysis metric '${labels[i]}' means in the context of a cyber spider-web threat analysis diagram. The current target device is ${this.device.hostname} (OS: ${os}). Keep it concise and highly relevant to an active AR cyber operation.`;
-        interactable.onTriggerEnd.add(() => {
-          if (this.selectAudio) this.selectAudio.play(1)
-          this.showNotebook(`METRIC: ${labels[i]}`, ctxStr)
-        });
-
-        this.makeLine(radarRoot, `Axis_${i}`, vec3.zero(), new vec3(Math.cos(a) * radius, Math.sin(a) * radius, 0), 0.5 * SC_R, new vec4(0, 1, 0.8, 0.4));
-      }
-      
-      // Draw concentric grid layers (spiderweb)
-      const numSteps = 5;
-      for (let step = 1; step <= numSteps; step++) {
-        const rStep = radius * (step / numSteps);
-        for (let i = 0; i < numAxes; i++) {
-          const a1 = Math.PI / 2 - (Math.PI * 2 * i) / numAxes;
-          const a2 = Math.PI / 2 - (Math.PI * 2 * ((i + 1) % numAxes)) / numAxes;
-          
-          const pt1 = new vec3(Math.cos(a1) * rStep, Math.sin(a1) * rStep, 0);
-          const pt2 = new vec3(Math.cos(a2) * rStep, Math.sin(a2) * rStep, 0);
-          
-          this.makeLine(radarRoot, `Grid_${step}_${i}`, pt1, pt2, 0.3 * SC_R, new vec4(0, 1, 0.8, 0.2));
-        }
-      }
-      
-      for (let i = 0; i < numAxes; i++) {
-        this.makeLine(radarRoot, `Data_${i}`, dataPts[i], dataPts[(i + 1) % numAxes], 2.0 * SC_R, tColor);
+        this.makeLine(radarRoot, `Grid_${step}_${i}`, pt1, pt2, 0.3 * scale, new vec4(0, 1, 0.8, 0.2))
       }
     }
 
-    // ==========================================
-    // --- LEFT MONITOR (Network Nodes & Ports) ---
-    // ==========================================
-    const SC_L = this.leftUIScale;
-    const l_s_w = BASE_s_w * SC_L;
-    const l_s_h = BASE_s_h * SC_L;
-    const l_s_d = BASE_s_d * SC_L;
-    
-    const l_s_z_face = (l_s_d / 2) - (BASE_screen_recess * SC_L) + (0.1 * SC_L);
-    // Use SC_C for pivot calculation so the side panels physically attach to the center panel's edge
-    const l_pivot_x = (BASE_c_w / 2 + BASE_side_gap) * SC_C;
-    const leftPivot = makeObject(scaledRoot, this.layer, "LeftPivot", new vec3(-l_pivot_x, 0, 0));
-    leftPivot.getTransform().setLocalRotation(quat.fromEulerVec(new vec3(0, side_angle, 0)));
-    
-    const lBasePos = new vec3(-l_s_w / 2, 0, l_s_z_face);
-    const leftPos = new vec3(lBasePos.x + this.leftUIOffset.x, lBasePos.y + this.leftUIOffset.y, lBasePos.z + this.leftUIOffset.z);
-    const leftRoot = makeObject(leftPivot, this.layer, "LeftMonitor", leftPos);
-    leftRoot.getTransform().setLocalRotation(quat.fromEulerVec(new vec3(this.leftUIRot.x * Math.PI/180, this.leftUIRot.y * Math.PI/180, this.leftUIRot.z * Math.PI/180)));
-    
+    for (let i = 0; i < numAxes; i++) {
+      this.makeLine(radarRoot, `Data_${i}`, dataPts[i], dataPts[(i + 1) % numAxes], 2.0 * scale, tColor)
+    }
+  }
+
+  private buildLeftMonitor(
+    scaledRoot: SceneObject,
+    layout: TripleMonitorLayout,
+    ports: PortDisplayItem[],
+    problems: ActionProblem[]
+  ): void {
+    const SC_C = layout.centerScale
+    const SC_L = this.leftUIScale
+    const TS = layout.textScale
+    const l_s_w = layout.baseSideWidth * SC_L
+    const l_s_h = layout.baseSideHeight * SC_L
+    const l_s_d = layout.baseSideDepth * SC_L
+
+    const l_s_z_face = (l_s_d / 2) - (layout.screenRecess * SC_L) + (0.1 * SC_L)
+    const l_pivot_x = (layout.baseCenterWidth / 2 + layout.sideGap) * SC_C
+    const leftPivot = makeObject(scaledRoot, this.layer, "LeftPivot", new vec3(-l_pivot_x, 0, 0))
+    leftPivot.getTransform().setLocalRotation(quat.fromEulerVec(new vec3(0, layout.sideAngle, 0)))
+
+    const lBasePos = new vec3(-l_s_w / 2, 0, l_s_z_face)
+    const leftPos = new vec3(lBasePos.x + this.leftUIOffset.x, lBasePos.y + this.leftUIOffset.y, lBasePos.z + this.leftUIOffset.z)
+    const leftRoot = makeObject(leftPivot, this.layer, "LeftMonitor", leftPos)
+    leftRoot.getTransform().setLocalRotation(quat.fromEulerVec(new vec3(
+      this.leftUIRot.x * Math.PI/180,
+      this.leftUIRot.y * Math.PI/180,
+      this.leftUIRot.z * Math.PI/180
+    )))
+
     this.leftRoot = leftRoot
     this.baseLeftUIPos = leftPos
-    
-    // Problems variable was moved up.
 
     if (problems.length > 0) {
-      // AI Rendered Action Items
-      makeText(leftRoot, this.layer, "L_Header", "ACTION ITEMS", FS_SMALL * SC_L * TS, C_CYAN, new vec3(0, l_s_h/2 - (15 * SC_L), 0), (l_s_w - (20 * SC_L)) * TS, 20 * SC_L * TS);
-      
-      let pY = l_s_h/2 - (40 * SC_L)
-      for (let i = 0; i < Math.min(problems.length, 3); i++) {
-        this.buildActionItemRow(leftRoot, problems[i], i, SC_L, l_s_w, pY, TS)
-        pY -= (35 * SC_L)
-      }
+      this.buildActionItems(leftRoot, "L_Header", "ACTION ITEMS", problems, 0, Math.min(problems.length, 3), SC_L, l_s_w, l_s_h, TS)
     } else {
-      // Default Network Rendering
-      makeText(leftRoot, this.layer, "L_Header", "NETWORK DIAGNOSTICS", FS_SMALL * SC_L * TS, C_CYAN, new vec3(0, l_s_h/2 - (25 * SC_L), 0), (l_s_w - (20 * SC_L)) * TS, 20 * SC_L * TS);
-      
-      const C_GREEN = new vec4(0.2, 1.0, 0.2, 1.0);
-      const C_ORANGE = new vec4(1.0, 0.5, 0.0, 1.0);
-      const C_RED = new vec4(1.0, 0.2, 0.2, 1.0);
-      
-      const netCenter = makeObject(leftRoot, this.layer, "NetCenter", new vec3(0, -10 * SC_L, 0));
-      
-      // OPEN PORTS Centered above the network icon
-      makeText(netCenter, this.layer, "L_PortsLabel", "OPEN PORTS", FS_SMALL * SC_L * TS, C_RED, new vec3(0, 12 * SC_L, 0), 100 * SC_L * TS, 20 * SC_L * TS, HorizontalAlignment.Center);
-      
-      makeText(netCenter, this.layer, "NetIcon", "[ NETWORK ]", FS_SMALL * SC_L * TS, C_WHITE, vec3.zero(), 100 * SC_L * TS, 20 * SC_L * TS);
-      const numPorts = Math.min(ports.length, 6);
-      if (numPorts === 0) {
-        makeText(leftRoot, this.layer, "L_Ports", `PORTS: NONE`, FS_TINY * SC_L * TS, C_ORANGE, new vec3(0, l_s_h/2 - (75 * SC_L), 0), (l_s_w - (20 * SC_L)) * TS, 15 * SC_L * TS);
-      } else {
-        const r = 45.0 * SC_L;
-        for (let i = 0; i < numPorts; i++) {
-          const a = (Math.PI * 2 * i) / numPorts;
-          const px = Math.cos(a) * r;
-          const py = Math.sin(a) * r;
-          
-          const p = ports[i];
-          const pVal = p.port || p;
-          const commonPorts: Record<string, string> = {
-            "22": "ssh", "80": "http", "443": "https", "3000": "node", "5000": "flask", "8080": "http-alt", "3306": "mysql", "5432": "postgres", "21": "ftp", "23": "telnet", "25": "smtp", "3389": "rdp", "5900": "vnc"
-          };
-          const pStr = pVal.toString();
-          const portStr = commonPorts[pStr] ? `${pStr}\n(${commonPorts[pStr]})` : pStr;
-          
-          const portRoot = makeObject(netCenter, this.layer, `PortRoot_${i}`, new vec3(px, py, 0));
-          const portVis = makeObject(portRoot, this.layer, `PortVis_${i}`, vec3.zero());
-          makeText(portVis, this.layer, `PortTxt_${i}`, portStr, FS_SMALL * SC_L * TS, C_GREEN, vec3.zero(), 80 * SC_L * TS, 40 * SC_L * TS, HorizontalAlignment.Center);
-          
-          // Question mark for info hint (hidden by default)
-          const qTxt = makeText(portVis, this.layer, `QTxt_${i}`, "?", FS_TITLE * SC_L * TS, C_CYAN, new vec3(12 * SC_L, 8 * SC_L, 0.5), 20 * SC_L * TS, 20 * SC_L * TS, HorizontalAlignment.Center, 35);
-          qTxt.enabled = false;
-          
-          const collider = portRoot.createComponent("Physics.ColliderComponent") as ColliderComponent;
-          collider.fitVisual = false;
-          const boxShape = Shape.createBoxShape();
-          boxShape.size = new vec3(15.0, 15.0, 2.0); // Slightly larger hitbox
-          collider.shape = boxShape;
+      this.buildNetworkDiagnostics(leftRoot, SC_L, l_s_w, l_s_h, ports, TS)
+    }
+  }
 
-          const interactable = portRoot.createComponent(Interactable.getTypeName()) as Interactable;
-          interactable.targetingMode = TargetingMode.All;
+  private buildActionItems(
+    root: SceneObject,
+    headerName: string,
+    title: string,
+    problems: ActionProblem[],
+    startIndex: number,
+    endIndex: number,
+    scale: number,
+    monitorWidth: number,
+    monitorHeight: number,
+    textScale: number
+  ): void {
+    makeText(root, this.layer, headerName, title, FS_SMALL * scale * textScale, C_CYAN, new vec3(0, monitorHeight/2 - (15 * scale), 0), (monitorWidth - (20 * scale)) * textScale, 20 * scale * textScale)
 
-          interactable.onHoverEnter.add(() => {
-            qTxt.enabled = true;
-            portVis.getTransform().setLocalPosition(new vec3(0, 0, 10.0)); // Float only the visuals
-          });
-          
-          interactable.onHoverExit.add(() => {
-            qTxt.enabled = false;
-            portVis.getTransform().setLocalPosition(vec3.zero()); // Reset
-          });
+    let pY = monitorHeight/2 - (40 * scale)
+    for (let i = startIndex; i < endIndex; i++) {
+      this.buildActionItemRow(root, problems[i], i, scale, monitorWidth, pY, textScale)
+      pY -= (35 * scale)
+    }
+  }
 
-          interactable.onTriggerEnd.add(() => {
-            if (this.selectAudio) this.selectAudio.play(1)
-            this.showNotebook(`Port ${pStr}`, `Open port ${pStr} on ${this.device.hostname}`)
-          });
+  private buildNetworkDiagnostics(
+    leftRoot: SceneObject,
+    scale: number,
+    monitorWidth: number,
+    monitorHeight: number,
+    ports: PortDisplayItem[],
+    textScale: number
+  ): void {
+    makeText(leftRoot, this.layer, "L_Header", "NETWORK DIAGNOSTICS", FS_SMALL * scale * textScale, C_CYAN, new vec3(0, monitorHeight/2 - (25 * scale), 0), (monitorWidth - (20 * scale)) * textScale, 20 * scale * textScale)
 
-          this.makeLine(netCenter, `PLine_${i}`, vec3.zero(), new vec3(px, py, 0), 0.5 * SC_L, new vec4(1, 0.2, 0.2, 0.3));
+    const C_GREEN = new vec4(0.2, 1.0, 0.2, 1.0)
+    const C_ORANGE = new vec4(1.0, 0.5, 0.0, 1.0)
+    const C_RED = new vec4(1.0, 0.2, 0.2, 1.0)
+
+    const netCenter = makeObject(leftRoot, this.layer, "NetCenter", new vec3(0, -10 * scale, 0))
+
+    makeText(netCenter, this.layer, "L_PortsLabel", "OPEN PORTS", FS_SMALL * scale * textScale, C_RED, new vec3(0, 12 * scale, 0), 100 * scale * textScale, 20 * scale * textScale, HorizontalAlignment.Center)
+    makeText(netCenter, this.layer, "NetIcon", "[ NETWORK ]", FS_SMALL * scale * textScale, C_WHITE, vec3.zero(), 100 * scale * textScale, 20 * scale * textScale)
+
+    const numPorts = Math.min(ports.length, 6)
+    if (numPorts === 0) {
+      makeText(leftRoot, this.layer, "L_Ports", `PORTS: NONE`, FS_TINY * scale * textScale, C_ORANGE, new vec3(0, monitorHeight/2 - (75 * scale), 0), (monitorWidth - (20 * scale)) * textScale, 15 * scale * textScale)
+    } else {
+      const r = 45.0 * scale
+      for (let i = 0; i < numPorts; i++) {
+        const a = (Math.PI * 2 * i) / numPorts
+        const px = Math.cos(a) * r
+        const py = Math.sin(a) * r
+
+        const p = ports[i]
+        const pVal = typeof p === "object" ? p.port : p
+        const commonPorts: Record<string, string> = {
+          "22": "ssh", "80": "http", "443": "https", "3000": "node", "5000": "flask", "8080": "http-alt", "3306": "mysql", "5432": "postgres", "21": "ftp", "23": "telnet", "25": "smtp", "3389": "rdp", "5900": "vnc"
         }
-      }
+        const pStr = pVal.toString()
+        const portStr = commonPorts[pStr] ? `${pStr}\n(${commonPorts[pStr]})` : pStr
 
-      for (let i = 0; i < 6; i++) {
-        const node = makeObject(netCenter, this.layer, `Node_${i}`, vec3.zero());
-        makePlate(node, this.layer, `NodePlt_${i}`, new vec2(6 * SC_L, 6 * SC_L), vec3.zero(), new vec4(1.0, 0.2, 0.2, 1.0), 1.0 * SC_L, undefined, 0, 0);
-        this.orbitingNodes.push(node);
+        const portRoot = makeObject(netCenter, this.layer, `PortRoot_${i}`, new vec3(px, py, 0))
+        const portVis = makeObject(portRoot, this.layer, `PortVis_${i}`, vec3.zero())
+        makeText(portVis, this.layer, `PortTxt_${i}`, portStr, FS_SMALL * scale * textScale, C_GREEN, vec3.zero(), 80 * scale * textScale, 40 * scale * textScale, HorizontalAlignment.Center)
+
+        const qTxt = makeText(portVis, this.layer, `QTxt_${i}`, "?", FS_TITLE * scale * textScale, C_CYAN, new vec3(12 * scale, 8 * scale, 0.5), 20 * scale * textScale, 20 * scale * textScale, HorizontalAlignment.Center, 35)
+        qTxt.enabled = false
+
+        const collider = portRoot.createComponent("Physics.ColliderComponent") as ColliderComponent
+        collider.fitVisual = false
+        const boxShape = Shape.createBoxShape()
+        boxShape.size = new vec3(15.0, 15.0, 2.0)
+        collider.shape = boxShape
+
+        const interactable = portRoot.createComponent(Interactable.getTypeName()) as Interactable
+        interactable.targetingMode = TargetingMode.All
+
+        interactable.onHoverEnter.add(() => {
+          qTxt.enabled = true
+          portVis.getTransform().setLocalPosition(new vec3(0, 0, 10.0))
+        })
+
+        interactable.onHoverExit.add(() => {
+          qTxt.enabled = false
+          portVis.getTransform().setLocalPosition(vec3.zero())
+        })
+
+        interactable.onTriggerEnd.add(() => {
+          if (this.selectAudio) this.selectAudio.play(1)
+          this.showNotebook(`Port ${pStr}`, `Open port ${pStr} on ${this.device.hostname}`)
+        })
+
+        this.makeLine(netCenter, `PLine_${i}`, vec3.zero(), new vec3(px, py, 0), 0.5 * scale, new vec4(1, 0.2, 0.2, 0.3))
       }
+    }
+
+    for (let i = 0; i < 6; i++) {
+      const node = makeObject(netCenter, this.layer, `Node_${i}`, vec3.zero())
+      makePlate(node, this.layer, `NodePlt_${i}`, new vec2(6 * scale, 6 * scale), vec3.zero(), new vec4(1.0, 0.2, 0.2, 1.0), 1.0 * scale, undefined, 0, 0)
+      this.orbitingNodes.push(node)
     }
   }
 
   private buildActionItemRow(
     root: SceneObject,
-    problem: any,
+    problem: ActionProblem,
     index: number,
     scale: number,
     monitorWidth: number,
@@ -657,7 +727,7 @@ export class DeviceDetailPanel {
     })
   }
 
-  private showFixPopup(problem: any): void {
+  private showFixPopup(problem: ActionProblem): void {
     // Dim the main UI to focus on popup
     this.uiRoot.enabled = false
 
